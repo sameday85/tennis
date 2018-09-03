@@ -61,7 +61,7 @@
 #define MOVING_SPEED		12 //was 15
 #define TURNING_SPEED_MIN   10
 #define TURNING_SPEED_MAX   30
-#define ROTATING_SPEED		40 //was 42
+#define ROTATING_SPEED		42 //was 42
 
 //ultra sound sensor
 #define PIN_TRIG_FRONT		15
@@ -120,10 +120,10 @@
 #define COLLECTOR_STATE_STOPPED			0
 #define COLLECTOR_STATE_RUNNING			1
 
-#define TURNING_DIRECTION_UNKNOWN			0
-#define TURNING_DIRECTION_CLOCKWISE			1
-#define TURNING_DIRECTION_COUNTERCLOCKWISE	2
-
+#define TURNING_DIRECTION_UNKNOWN			0 //low byte
+#define TURNING_DIRECTION_CLOCKWISE			1 //low byte
+#define TURNING_DIRECTION_COUNTERCLOCKWISE	2 //low byte
+#define MASK_TURNING_BACK_FIRST             0x0100 //high byte, move the car back first
 //user actions
 #define UA_NONE				    0
 #define UA_PAUSE			    1
@@ -136,7 +136,9 @@
 #define UA_DEBUG			    10
 #define UA_SPEED_CALIBRATE	    11
 #define UA_PRE_SPEED_CALIBRATE	12
-#define UA_PRE_CAMERA_CALIBRATE	13
+#define UA_PRE_CAMERA_CALIBRATE 13
+#define UA_NAV2_PAUSE	        14
+#define UA_NAV2_RESUME	        15
 #define UA_DONE				100
 
 #define VENUE_INDOOR		0 //for debugging
@@ -247,7 +249,7 @@ void hook_signal() {
 //right now only the tennis ball hsv color range are configurable from the configuraion file.
 void load_config() {
 	debug = true;
-	g_user_action=UA_NONE;
+	g_user_action=UA_NAV2_RESUME;
 	//default values
 	frames_per_second = 10;
 	frame_time_ms = 1000 / frames_per_second;
@@ -540,8 +542,10 @@ void stop_car() {
 void* _turn_car_360(void *arg) {
 	g_turning_360 = true;
 	int direction =*((int*)arg);
-	bool clockwise = (direction == TURNING_DIRECTION_CLOCKWISE);
+	bool clockwise = ((direction & 0xff) == TURNING_DIRECTION_CLOCKWISE);
+    bool back_first = (direction & MASK_TURNING_BACK_FIRST) != 0;
 	int desired_car_states[2];
+	int duration_ms[2], step=500;
 	if (clockwise) {
 		desired_car_states[0]=CAR_STATE_TURNING_RIGHT_FORWARD;
 		desired_car_states[1]=CAR_STATE_TURNING_RIGHT_BACKWARD;
@@ -550,9 +554,18 @@ void* _turn_car_360(void *arg) {
 		desired_car_states[0]=CAR_STATE_TURNING_LEFT_FORWARD;
 		desired_car_states[1]=CAR_STATE_TURNING_LEFT_BACKWARD;
 	}
-	int duration_ms[2], step=500;
 	duration_ms[0]=1500; //forward
 	duration_ms[1]=1000; //backward
+    if (back_first) {
+        //swap
+        int t = duration_ms[0];
+        duration_ms[0]=duration_ms[1];
+        duration_ms[1]=t;
+        
+        t = desired_car_states[0];
+        desired_car_states[0]=desired_car_states[1];
+        desired_car_states[1]=t;
+    }
 	for (int i = 0; i < 20 && g_turning_360; ++i) {
 		switch (desired_car_states[i & 1]) {
 			case CAR_STATE_TURNING_LEFT_FORWARD:
@@ -1050,20 +1063,20 @@ long measure_rear_distance(void) {
 //options:
 //red on    - pause/resume
 //green on  - camera calibration
-//blue on   - speed calibration
+//blue on   - speed/motor calibration
 void* btn_event_handle(int event) {
     if (debug)
         cout << "Btn event " << event <<", g state=" << g_user_action << endl;
     if ((event & 0xff) == BTN_01) { //select options
         switch (g_user_action) {
             case UA_NONE:
-                g_user_action = UA_PAUSE;
+                g_user_action = UA_NAV2_PAUSE;
                 turn_on_red_led();
                 turn_off_led(PIN_LED_GREEN);
                 turn_off_led(PIN_LED_BLUE);
                 break;
             case UA_PAUSE:
-                g_user_action = UA_NONE;
+                g_user_action = UA_NAV2_RESUME;
                 turn_off_red_led();
                 turn_off_led(PIN_LED_GREEN);
                 turn_off_led(PIN_LED_BLUE);
@@ -1370,11 +1383,12 @@ bool targeting (RobotCtx *context, bool recovering) {
 	}
 	if (found && (is_ready_pickup(&context->scene) || abs(context->scene.angle) <= PERFECT_ANGLE))
 		return found;
-        
-	{
+    //If the car is too close to the ball, move back a little bit
+    int mask = is_covered(&context->scene, false) ? 0 : MASK_TURNING_BACK_FIRST;
+	{ 
 		//step 2, move back and forth to target the ball
 		int last_angle = context->scene.angle, this_angle=0;
-		turn_car_360(last_angle > 0 ? TURNING_DIRECTION_CLOCKWISE : TURNING_DIRECTION_COUNTERCLOCKWISE);
+		turn_car_360(mask | (last_angle > 0 ? TURNING_DIRECTION_CLOCKWISE : TURNING_DIRECTION_COUNTERCLOCKWISE));
 		//reset again
 		found = false;
 		long till_ms = current_time_ms() + MAX_TURNING_90_MS * 4;
@@ -1503,14 +1517,12 @@ void picking_up(RobotCtx *ctx) {
                     get_stable_scene(ctx);
                 }
 				if (g_user_action == UA_NONE && ctx->interruption == INT_NONE) {//we are still moving
-					start_collector();
 					delay_ms(WAIT_BALL_OUT_OF_SCENE_MS);
                     stop_car();
                     delay_ms(WAIT_BALL_PICKUP_MS);
 					++ctx->balls_collected;
 					picked_one = true;
 				}
-				stop_collector();
 			}
 		}
 	}
@@ -1557,20 +1569,18 @@ int main ( int argc,char **argv ) {
 	memset (&g_context, 0, sizeof (RobotCtx));
 	for (int i = 1; i < argc; ++i) {
 		if (strcmp (argv[i], "-boot") == 0) {
-            //Indicating initialization
+            //All leds on to indicate initialization
             turn_on_red_led();
             turn_on_led(PIN_LED_GREEN);
             turn_on_led(PIN_LED_BLUE);
-			delay_ms(10 * 1000);
-			g_user_action=UA_PAUSE;
+			delay_ms(10 * 1000); //wait for 10 seconds
+			g_user_action=UA_NAV2_PAUSE;
 			g_context.venue=VENUE_OUTDOOR;
 			debug = false;
+            //turn off these two leds but keep red led on
             turn_off_led(PIN_LED_GREEN);
             turn_off_led(PIN_LED_BLUE);
             buzzle(false);
-		}
-		else if (strcmp (argv[i], "-court") == 0) {
-			g_context.venue=VENUE_OUTDOOR;
 		}
 		else if (strcmp (argv[i], "-motor") == 0) {
 			g_user_action=UA_TEST_MOTOR;
@@ -1588,7 +1598,7 @@ int main ( int argc,char **argv ) {
 			g_user_action=UA_DEBUG;
 		}
 		else if (strcmp (argv[i], "-pause") == 0) {
-			g_user_action=UA_PAUSE;
+			g_user_action=UA_NAV2_PAUSE;
 		}
 	}
     if (g_context.venue == VENUE_INDOOR) {
@@ -1598,7 +1608,7 @@ int main ( int argc,char **argv ) {
         active_config = &outdoor_config;
     }
     else {
-        active_config = NULL;//shout throw an exception
+        active_config = NULL;//should throw an exception
     }
 	//force to stop
     g_car_state=CAR_STATE_MOVING_BACKWARD;
@@ -1621,11 +1631,9 @@ int main ( int argc,char **argv ) {
 	pthread_t thread_observor;
 	pthread_create(&thread_observor, NULL, observor, NULL);
 
-    //tap the button to start
 	while (g_user_action != UA_DONE) {
 		switch (g_user_action) {
 			case UA_NONE:
-				turn_off_red_led();
 				picking_up(&g_context);
 				switch (g_context.interruption) {
 					case INT_FRONT_OBSTACLE:
@@ -1635,7 +1643,7 @@ int main ( int argc,char **argv ) {
 						break;
 					case INT_NO_MORE_BALLS:
 						if (g_user_action != UA_DONE) {
-							g_user_action=UA_PAUSE; //auto pause
+							g_user_action=UA_NAV2_PAUSE; //auto pause
 							g_context.interruption = INT_NONE;
 							buzzle(true);
 						}
@@ -1645,17 +1653,23 @@ int main ( int argc,char **argv ) {
 						break;
 				}//inner switch
 				break;
-			case UA_PAUSE:
+            case UA_NAV2_PAUSE:
 				stop_car();
+                stop_collector();
 				turn_on_red_led();
-				delay_ms(frame_time_ms);
-				break;
+                g_user_action=UA_PAUSE;
+                break;
+            case UA_NAV2_RESUME:
+                start_collector();
+                turn_off_red_led();
+                g_user_action = UA_NONE;
+                break;
 			case UA_SPEED_CALIBRATE:
 				if (speed_calibrate()) {
 					save_config();
 				}
 				if (g_user_action != UA_DONE) {
-					g_user_action=UA_PAUSE;
+					g_user_action=UA_NAV2_PAUSE;
 				}
 				break;
 			case UA_CAMERA_CALIBRATE:
@@ -1663,7 +1677,7 @@ int main ( int argc,char **argv ) {
 					save_config();
 				}
 				if (g_user_action != UA_DONE) {
-					g_user_action=UA_PAUSE;
+					g_user_action=UA_NAV2_PAUSE;
 				}
 				break;
 			case UA_TEST_MOTOR:
@@ -1674,9 +1688,6 @@ int main ( int argc,char **argv ) {
 				start_collector();
 				g_user_action=UA_WAITING;
 				break;
-			case UA_TEST_CAMERA:
-				delay_ms(1000);
-				break;
 			case UA_TEST_SELF:
 				self_test();
 				delay_ms(1000);
@@ -1685,19 +1696,24 @@ int main ( int argc,char **argv ) {
                 speed_calibrate();
 				g_user_action=UA_DONE;
 				break;
-            default: //UA_PRE_SPEED_CALIBRATE, UA_PRE_CAMERA_CALIBRATE, UA_WAITING etc
+            default: //UA_PAUSE, UA_PRE_SPEED_CALIBRATE, UA_PRE_CAMERA_CALIBRATE, UA_WAITING, UA_TEST_CAMERA etc
 				delay_ms(1000);
 				break;
 		}//switch
 	} //while
+    
+    //exiting
 	g_turning_360=false;
     pthread_join(thread_sensor, NULL);
     pthread_join(thread_observor, NULL);
     Camera.release();
-    turn_off_red_led();
+    //turn off all led
+    turn_off_led(PIN_LED_RED);
     turn_off_led(PIN_LED_GREEN);
     turn_off_led(PIN_LED_BLUE);
+    //stop buzzle
     digitalWrite(PIN_BUZZLE, LOW);
+    //stop all motors
     stop_car();
     stop_collector();
     
