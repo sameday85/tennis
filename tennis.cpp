@@ -148,13 +148,6 @@
 
 using namespace std; 
 
-int g_user_action;
-bool g_is_led_on;
-bool debug;
-
-
-int scene_seq_consumed;
-
 //											                   0
 typedef struct _Scene {                //                      |
 	int balls; //total number of balls                         |
@@ -194,10 +187,15 @@ typedef struct _RobotConfig{
 Scene g_scene; //the current scene
 RobotCtx g_context;
 RobotConfig indoor_config, outdoor_config, *active_config;
+
 int frames_per_second, frame_time_ms; //image capturing
 
 int g_car_state, g_collector_state;
 bool g_turning_360;
+bool g_is_led_on; //red led
+
+int g_user_action;
+bool debug;
 
 raspicam::RaspiCam_Cv Camera;
 
@@ -213,6 +211,7 @@ int abs(int value) {
 void delay_ms(int x) {
 	usleep(x * 1000);
 }
+
 //current system time in milliseconds
 long current_time_ms() {
 	struct timeval start;
@@ -252,7 +251,6 @@ void load_config() {
 	//default values
 	frames_per_second = 10;
 	frame_time_ms = 1000 / frames_per_second;
-	scene_seq_consumed = 0;
     
     //initialize configurations, speed_base is now zero
     memset (&indoor_config, sizeof (RobotConfig), 0);
@@ -317,7 +315,7 @@ void load_config() {
 void save_config() {
 	std::ofstream out(CONFIG_FILE);
     
-    out << "[indoor]" << endl;
+    out << "[indoor]" << endl; //do not change this section name
     out << "minH=" << indoor_config.minH << endl;
     out << "maxH=" << indoor_config.maxH << endl;
     out << "minS=" << indoor_config.minS << endl;
@@ -326,7 +324,7 @@ void save_config() {
     out << "maxV=" << indoor_config.maxV << endl;
     out << "speedBase=" << indoor_config.speed_base << endl;
     
-    out << "[outdoor]" << endl;
+    out << "[outdoor]" << endl; //do not change this section name
     out << "minH=" << outdoor_config.minH << endl;
     out << "maxH=" << outdoor_config.maxH << endl;
     out << "minS=" << outdoor_config.minS << endl;
@@ -646,7 +644,7 @@ int choose_turning_driection(RobotCtx *ctx, bool recovering) {
 		direction = TURNING_DIRECTION_CLOCKWISE;
 	return direction;
 }
-//workaround the front or rear obstacle. for rear obstacle do nothing as the car alredy stopped.
+//workaround the front or rear obstacle. do nothing for rear obstacle as the car already stopped.
 void workaround_obstacle(RobotCtx *ctx) {
 	if (ctx->interruption == INT_FRONT_OBSTACLE) {
 		move_car_backward();
@@ -769,7 +767,7 @@ int mesaure_speed() {
     move_car_backward();
     delay_ms(duration_s * 1000);
     stop_car();
-    delay_ms(500); //wait for 1/2 second, then move forward
+    delay_ms(500); //wait for 1/2 second
     long distance4 = measure_front_distance_ex();
 
     long speed1 = (distance1 - distance2) / duration_s;
@@ -808,10 +806,11 @@ bool speed_calibrate() {
             break;
     }
     turn_off_led(using_pin);
-    buzzle(false);
+    buzzle(!calibrated);
     
     return calibrated;
 }
+
 //recognize one ball and get its hsv color range. the idea is to take a background picture first(the led is stead on, frame 1), 
 //then put one ball in the background (the led is flashing) and get another picture(after the led stop flashing, frame 2). 
 //substract frame1 from frame 2 to get the ball picture only with all other areas as black. pixels will then be retrieved
@@ -1022,7 +1021,8 @@ long measure_front_distance(void)
 	}
 	return distance;
 }
-
+//sometimes the front ultra sound sensor reports false distance.
+//this function tries to filter out these false results.
 long measure_front_distance_ex(void) {
     long distance = measure_front_distance();
     long timestamp = current_time_ms() + 2000;//try at most two seconds
@@ -1261,6 +1261,7 @@ void* sensor(void *arg) {
 //get one scene
 //@returns true if one updated scene is available and retrieved, otherwise false.
 bool get_stable_scene(RobotCtx *ctx) {
+    static unsigned long scene_seq_consumed = 0;
 	if (ctx->scene.balls > 1) {
 		memcpy (&ctx->last_scene_w_balls, &ctx->scene, sizeof (Scene));
 	}

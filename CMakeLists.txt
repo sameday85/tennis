@@ -1,11 +1,19 @@
-#export raspicam_DIR=/home/pi/raspicam-0.1.6/build
+# mkdir build
+# cd build
+# cmake  -DCMAKE_BUILD_TYPE=Release ..
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
+endif()
+set(CMAKE_CXX_FLAGS "-Wall -Wextra")
+set(CMAKE_CXX_FLAGS_DEBUG "-g")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 cmake_minimum_required (VERSION 2.8) 
-project (raspicam_test)
+project (tennis)
 set(raspicam_DIR "/usr/local/lib/cmake")
 find_package(raspicam REQUIRED)
 find_package(OpenCV)
 IF  ( OpenCV_FOUND AND raspicam_CV_FOUND)
-MESSAGE(STATUS "COMPILING OPENCV TESTS")
+MESSAGE(STATUS "COMPILING...")
 add_executable (tennis tennis.cpp)  
 target_link_libraries (tennis wiringPi wiringPiDev pthread ${raspicam_CV_LIBS})
 ELSE()
