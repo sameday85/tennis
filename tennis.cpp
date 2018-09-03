@@ -112,7 +112,7 @@
 #define CAR_STATE_MOVING_BACKWARD			2
 #define CAR_STATE_TURNING_LEFT_FORWARD		3 //two motors running in full speed, other two running in half speed, car is moving forward
 #define CAR_STATE_TURNING_RIGHT_FORWARD		5
-#define CAR_STATE_TURNING_LEFT_BACKWARD		4 //two motors running in full speed, other two running in half speed, car is moving forward
+#define CAR_STATE_TURNING_LEFT_BACKWARD		4 //two motors running in full speed, other two running in half speed, car is moving backward
 #define CAR_STATE_TURNING_RIGHT_BACKWARD	6
 #define CAR_STATE_ROTATING_LEFT				21
 #define CAR_STATE_ROTATING_RIGHT			23
@@ -253,7 +253,7 @@ void load_config() {
 	frame_time_ms = 1000 / frames_per_second;
     
     //initialize configurations, speed_base is now zero
-    memset (&indoor_config, sizeof (RobotConfig), 0);
+    memset (&indoor_config, 0, sizeof (RobotConfig));
 	indoor_config.minH = 60;  indoor_config.maxH = 90; //0-180
 	indoor_config.minS = 170; indoor_config.maxS = 255; //0-255
 	indoor_config.minV = 70;  indoor_config.maxV = 155; //0-255
@@ -569,13 +569,14 @@ void* _turn_car_360(void *arg) {
 			break;
 		}
 		int state_ms = duration_ms[i&1];
-		int car_state= g_car_state;
 		for (int j = 0; (j < state_ms / step) && g_turning_360; ++j) {
 			delay_ms(step);
 		}
 	}
 	if (debug)
 		cout << "Exited from turning car thread ...." << endl;
+
+    return NULL;
 }
 
 //turn the car slowly. this will be done by starting a new background thread to run the above _turn_car_360 function
@@ -696,12 +697,14 @@ void turn_off_red_led() {
 	digitalWrite(PIN_LED_RED, LOW);
 	g_is_led_on=false;
 }
+
 //make a long or shot buzzle
 void buzzle (bool long_time) {
 	digitalWrite(PIN_BUZZLE, HIGH);
 	delay_ms(long_time ? 2000 : 300);
 	digitalWrite(PIN_BUZZLE, LOW);
 }
+
 //perform self test. this will test the robot car motors, collector, led  and buzzle.
 //it is better to lift the car up when run this test.
 void self_test() {
@@ -821,7 +824,6 @@ bool camera_calibrate() {
     int using_pin = PIN_LED_GREEN;
 	turn_on_led(using_pin);
 	delay_ms(2000);
-    buzzle(false);
     
 	//take the background image
 	cv::Mat bg;
@@ -834,7 +836,7 @@ bool camera_calibrate() {
 	
 	int trying = 0;
 	cv::Mat frame;
-	bool found = false;
+	bool found = false, notified = false;
 	while (!found && (trying <= 10) && (g_user_action != UA_DONE)) { //at most ten seconds
 		//flashing the led
 		++trying;
@@ -848,8 +850,10 @@ bool camera_calibrate() {
 			}
 			continue;
 		}
-		else {
+		else if (!notified) {
 			turn_on_led(using_pin); //stays on
+            buzzle(false);
+            notified = true;
 		}
 
 		Camera.grab();
@@ -885,7 +889,7 @@ bool camera_calibrate() {
 
 			cv::Mat hsv;
 			cv::cvtColor (frame, hsv, CV_BGR2HSV);
-			int _minH, _minS, _minV, _maxH, _maxS, _maxV;
+			int _minH=0, _minS=0, _minV=0, _maxH=0, _maxS=0, _maxV=0;
 			map<int, int> statistics;
 			for (int i = 0; i<frame.rows; i++)  {
 				for (int j = 0; j<frame.cols; j++) {
@@ -907,7 +911,7 @@ bool camera_calibrate() {
 			vector<int> sorted_values;
 			map<int, int>::iterator it1 = statistics.begin();
 			while(it1 != statistics.end()) {
-				int key = it1->first;
+				//int key = it1->first;
 				int value = it1->second;
 				sorted_values.push_back(value);
 				it1++;
@@ -1101,6 +1105,7 @@ void* btn_event_handle(int event) {
                 break;
         }
     }
+    return NULL;
 }
 
 //Observing obstacles, stop the car if needed.  the interruption flag in the context will be set if an obstracle is very close.
@@ -1137,6 +1142,7 @@ void* observor(void *arg) {
 		}
 		delay_ms(frame_time_ms); //obstacle distance is updated in every frame
 	}
+    return arg;//suppress the unused param warning
 }
 //capturing frames and analyse each frame to recognize balls, find the nearest ball and get its distance and angle. other information such as
 //balls at the left of the nearest ball, balls at the right of the nearest ball are also available and saved to global variable g_scene.
@@ -1184,7 +1190,7 @@ void* sensor(void *arg) {
 			long min_distance = 0;
 			int min_angle=180, ball_angle = 180, ball_distance_y = 0, center_x = 0;
 			vector<cv::Point> all_positions;
-			for( int i = 0; i < contours.size(); i++ ) {
+			for( size_t i = 0; i < contours.size(); i++ ) {
 				int area = cv::contourArea(contours[i]);
 				if (area < active_config->min_area)
 					continue;
@@ -1217,7 +1223,7 @@ void* sensor(void *arg) {
 			}
 			int balls_at_left = 0, balls_at_right = 0;
 			int nearest_ball_at_left = 0, nearest_ball_at_right = 0;
-			for (int i = 0; i < all_positions.size(); ++i) {
+			for (size_t i = 0; i < all_positions.size(); ++i) {
 				cv::Point pt = all_positions.at(i);
 				if (pt.x > center_x) {
 					++balls_at_right;
@@ -1242,7 +1248,7 @@ void* sensor(void *arg) {
 			g_scene.rear_obstacle=measure_rear_distance();
 			g_scene.seq++;
 			if (debug) {
-				cout << "#" << g_scene.seq << ": " << g_scene.balls << ",target ball angle " << g_scene.angle << ",dist " << g_scene.distance  << ",all balls min angle " << g_scene.min_angle<< ",obstacles(F/R) " << g_scene.front_obstacle << "/" << g_scene.rear_obstacle << ",balls(L/R) " <<  balls_at_left << "/" << balls_at_right << endl;
+				cout << "#" << g_scene.seq << ": " << g_scene.balls << ",target ball angle " << g_scene.angle << ",dist " << g_scene.distance  << ",all balls min angle " << g_scene.min_angle<< ",obstacles(F/R) " << g_scene.front_obstacle << "/" << g_scene.rear_obstacle << ",balls(L/R) " <<  balls_at_left << "/" << balls_at_right << ",time=" << (current_time_ms() - frame_start) << endl;
 			}
 
 			//save image 
@@ -1256,6 +1262,8 @@ void* sensor(void *arg) {
 		if (left > 0)
 			delay_ms(left);
 	}
+    
+    return arg;
 }
 
 //get one scene
@@ -1266,7 +1274,6 @@ bool get_stable_scene(RobotCtx *ctx) {
 		memcpy (&ctx->last_scene_w_balls, &ctx->scene, sizeof (Scene));
 	}
 	Scene *output = &ctx->scene;
-	long last_seq = scene_seq_consumed;
 	while (scene_seq_consumed == g_scene.seq && (g_user_action == UA_NONE || g_user_action == UA_TEST_CAMERA)) {
 		delay_ms(frame_time_ms >> 1);
 	}
@@ -1361,8 +1368,9 @@ bool targeting (RobotCtx *context, bool recovering) {
 		if (!found)
 			return false;
 	}
-	if (found && is_ready_pickup(&context->scene) || abs(context->scene.angle) <= PERFECT_ANGLE)
+	if (found && (is_ready_pickup(&context->scene) || abs(context->scene.angle) <= PERFECT_ANGLE))
 		return found;
+        
 	{
 		//step 2, move back and forth to target the ball
 		int last_angle = context->scene.angle, this_angle=0;
@@ -1549,10 +1557,17 @@ int main ( int argc,char **argv ) {
 	memset (&g_context, 0, sizeof (RobotCtx));
 	for (int i = 1; i < argc; ++i) {
 		if (strcmp (argv[i], "-boot") == 0) {
+            //Indicating initialization
+            turn_on_red_led();
+            turn_on_led(PIN_LED_GREEN);
+            turn_on_led(PIN_LED_BLUE);
 			delay_ms(10 * 1000);
 			g_user_action=UA_PAUSE;
 			g_context.venue=VENUE_OUTDOOR;
 			debug = false;
+            turn_off_led(PIN_LED_GREEN);
+            turn_off_led(PIN_LED_BLUE);
+            buzzle(false);
 		}
 		else if (strcmp (argv[i], "-court") == 0) {
 			g_context.venue=VENUE_OUTDOOR;
@@ -1670,7 +1685,7 @@ int main ( int argc,char **argv ) {
                 speed_calibrate();
 				g_user_action=UA_DONE;
 				break;
-            default: //UA_INC_SPEED, UA_DEC_SPEED, UA_PRE_CAMERA_CALIBRATE, UA_WAITING
+            default: //UA_PRE_SPEED_CALIBRATE, UA_PRE_CAMERA_CALIBRATE, UA_WAITING etc
 				delay_ms(1000);
 				break;
 		}//switch
