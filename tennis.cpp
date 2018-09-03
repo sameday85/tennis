@@ -57,6 +57,7 @@
 #define PIN_PWM_RIGHT		11
 #define PWM_MAX				100
 
+#define TARGET_CALIBRATION_SPEED     16 //cm per second, for calibrating the motor speed
 #define MOVING_SPEED		12 //was 15
 #define TURNING_SPEED_MIN   10
 #define TURNING_SPEED_MAX   30
@@ -124,18 +125,18 @@
 #define TURNING_DIRECTION_COUNTERCLOCKWISE	2
 
 //user actions
-#define UA_NONE				0
-#define UA_PAUSE			1
-#define UA_CALIBRATE		2
-#define UA_TEST_MOTOR		3
-#define UA_TEST_COLLECTOR	4
-#define UA_TEST_CAMERA		5
-#define UA_TEST_SELF		6
-#define UA_WAITING			9
-#define UA_DEBUG			10
-#define UA_INC_SPEED		11
-#define UA_DEC_SPEED	    12
-#define UA_PRE_CALIBRATE	13
+#define UA_NONE				    0
+#define UA_PAUSE			    1
+#define UA_CAMERA_CALIBRATE	    2
+#define UA_TEST_MOTOR		    3
+#define UA_TEST_COLLECTOR	    4
+#define UA_TEST_CAMERA		    5
+#define UA_TEST_SELF		    6
+#define UA_WAITING			    9
+#define UA_DEBUG			    10
+#define UA_SPEED_CALIBRATE	    11
+#define UA_PRE_SPEED_CALIBRATE	12
+#define UA_PRE_CAMERA_CALIBRATE	13
 #define UA_DONE				100
 
 #define VENUE_INDOOR		0 //for debugging
@@ -151,18 +152,7 @@ int g_user_action;
 bool g_is_led_on;
 bool debug;
 
-int speed_base;
-//the camera is not facing front straightly, add this value the calculated ball's angle
-int camera_deviation; 
-//inRange
-int minH, maxH, minS, maxS, minV, maxV;
-//Blur
-int erosion_size, dilation_size;
-//Canny
-int canny_thresh;
-int min_area; //min area of the contour
-//
-int frames_per_second, frame_time_ms;
+
 int scene_seq_consumed;
 
 //											                   0
@@ -190,17 +180,29 @@ typedef struct _RobotCtx {
 	int last_turn_direction;
 } RobotCtx;
 
+//some configurations will be saved/loaded from the configuration file
+typedef struct _RobotConfig{
+    //for ball recognization
+    int minH, maxH, minS, maxS, minV, maxV;//inRange
+    int erosion_size, dilation_size;//Blur
+    int canny_thresh;//Canny
+    int min_area; //min area of the contour
+
+    int speed_base;//add this to the SPEED macros
+} RobotConfig;
+
 Scene g_scene; //the current scene
 RobotCtx g_context;
+RobotConfig indoor_config, outdoor_config, *active_config;
+int frames_per_second, frame_time_ms; //image capturing
+
 int g_car_state, g_collector_state;
 bool g_turning_360;
 
 raspicam::RaspiCam_Cv Camera;
 
-//the low byte is the button number (BTN_1 or BTN_2)
-//high byte is reserved
-vector<int> btn_events;
-std::mutex mtx_btn_event; //mutex for accessing above button event vector
+//function declarations
+long measure_front_distance_ex(void);
 
 int abs(int value) {
 	if (value < 0)
@@ -247,74 +249,92 @@ void hook_signal() {
 void load_config() {
 	debug = true;
 	g_user_action=UA_NONE;
-	speed_base = 0;
-	camera_deviation=0;
 	//default values
 	frames_per_second = 10;
-	
-	minH = 60;  maxH = 90; //0-180
-	minS = 170; maxS = 255; //0-255
-	minV = 70;  maxV = 155; //0-255
-
-	erosion_size = 3;
-	dilation_size= 10;
-	
-	canny_thresh = 100;
-	min_area = 4;
-	
 	frame_time_ms = 1000 / frames_per_second;
 	scene_seq_consumed = 0;
-
-	map<string, string> ans;
+    
+    //initialize configurations, speed_base is now zero
+    memset (&indoor_config, sizeof (RobotConfig), 0);
+	indoor_config.minH = 60;  indoor_config.maxH = 90; //0-180
+	indoor_config.minS = 170; indoor_config.maxS = 255; //0-255
+	indoor_config.minV = 70;  indoor_config.maxV = 155; //0-255
+	indoor_config.erosion_size = 3;
+	indoor_config.dilation_size= 10;
+	indoor_config.canny_thresh = 100;
+	indoor_config.min_area = 4;
+    memcpy(&outdoor_config, &indoor_config, sizeof (RobotConfig));
+    
+	//parse the configuration file
+    RobotConfig *config = NULL;
     ifstream input(CONFIG_FILE, ifstream::in); //The input stream
     string line;
     while (input) {
         getline(input, line, '\n');
         if (line.find_first_of("#") == 0)
 			continue;
-        string::size_type pos = line.find_first_of("=");
-        if (pos != string::npos) {
-			string key = line.substr(0, pos);
-            string value = line.substr(pos+1);
-            ans[key]=value;
+        if (line.find_first_of("[") == 0) {
+            if (line.compare("[indoor]") == 0) {
+                config = &indoor_config;
+            }
+            else if (line.compare("[outdoor]") == 0) {
+                config = &outdoor_config;
+            }
+        }
+        else if (config) {
+            string::size_type pos = line.find_first_of("=");
+            if (pos != string::npos) {
+                string key   = line.substr(0, pos);
+                string value = line.substr(pos+1);
+                if (key.compare("minH") == 0) {
+                    config->minH = stoi(value);
+                }
+                else if (key.compare("maxH") == 0) {
+                    config->maxH = stoi(value);
+                }
+                else if (key.compare("minS") == 0) {
+                    config->minS = stoi(value);
+                }
+                else if (key.compare("maxS") == 0) {
+                    config->maxS = stoi(value);
+                }
+                else if (key.compare("minV") == 0) {
+                    config->minV = stoi(value);
+                }
+                else if (key.compare("maxV") == 0) {
+                    config->maxV = stoi(value);
+                }
+                else if (key.compare("speedBase") == 0) {
+                    config->speed_base = stoi(value);
+                }
+            }
         }
     }
     input.close();
-    
-    if (ans.size() <= 0)
-		return;
-		
-	//inRange color filter
-	if (ans.count("minH") == 1) {
-		minH = stoi(ans["minH"]);
-	}
-	if (ans.count("maxH") == 1) {
-		maxH = stoi(ans["maxH"]);
-	}
-	if (ans.count("minS") == 1) {
-		minS = stoi(ans["minS"]);
-	}
-	if (ans.count("maxS") == 1) {
-		maxS = stoi(ans["maxS"]);
-	}
-	if (ans.count("minV") == 1) {
-		minV = stoi(ans["minV"]);
-	}
-	if (ans.count("maxV") == 1) {
-		maxV = stoi(ans["maxV"]);
-	}
 }	
 
 //save the tennis ball color range to the configuration file
 void save_config() {
 	std::ofstream out(CONFIG_FILE);
-    out << "[OpenCV]" << endl;
-    out << "minH=" << minH << endl;
-    out << "maxH=" << maxH << endl;
-    out << "minS=" << minS << endl;
-    out << "maxS=" << maxS << endl;
-    out << "minV=" << minV << endl;
-    out << "maxV=" << maxV << endl;
+    
+    out << "[indoor]" << endl;
+    out << "minH=" << indoor_config.minH << endl;
+    out << "maxH=" << indoor_config.maxH << endl;
+    out << "minS=" << indoor_config.minS << endl;
+    out << "maxS=" << indoor_config.maxS << endl;
+    out << "minV=" << indoor_config.minV << endl;
+    out << "maxV=" << indoor_config.maxV << endl;
+    out << "speedBase=" << indoor_config.speed_base << endl;
+    
+    out << "[outdoor]" << endl;
+    out << "minH=" << outdoor_config.minH << endl;
+    out << "maxH=" << outdoor_config.maxH << endl;
+    out << "minS=" << outdoor_config.minS << endl;
+    out << "maxS=" << outdoor_config.maxS << endl;
+    out << "minV=" << outdoor_config.minV << endl;
+    out << "maxV=" << outdoor_config.maxV << endl;
+    out << "speedBase=" << outdoor_config.speed_base << endl;
+    
     out.close();
 }
 
@@ -377,23 +397,23 @@ void set_speed(int desired_state) {
 	switch (desired_state) {
 		case CAR_STATE_MOVING_FORWARD:
 		case CAR_STATE_MOVING_BACKWARD:
-			softPwmWrite (PIN_PWM_LEFT,  MOVING_SPEED+speed_base);
-			softPwmWrite (PIN_PWM_RIGHT, MOVING_SPEED+speed_base);
+			softPwmWrite (PIN_PWM_LEFT,  MOVING_SPEED+active_config->speed_base);
+			softPwmWrite (PIN_PWM_RIGHT, MOVING_SPEED+active_config->speed_base);
 			break;
 		case CAR_STATE_TURNING_LEFT_FORWARD:
 		case CAR_STATE_TURNING_RIGHT_BACKWARD: //car header direction change
-			softPwmWrite (PIN_PWM_LEFT,  TURNING_SPEED_MIN+speed_base); 
-			softPwmWrite (PIN_PWM_RIGHT, TURNING_SPEED_MAX+speed_base);
+			softPwmWrite (PIN_PWM_LEFT,  TURNING_SPEED_MIN+active_config->speed_base); 
+			softPwmWrite (PIN_PWM_RIGHT, TURNING_SPEED_MAX+active_config->speed_base);
 			break;
 		case CAR_STATE_TURNING_RIGHT_FORWARD:
 		case CAR_STATE_TURNING_LEFT_BACKWARD: //car header direction change
-			softPwmWrite (PIN_PWM_LEFT,  TURNING_SPEED_MAX+speed_base);
-			softPwmWrite (PIN_PWM_RIGHT, TURNING_SPEED_MIN+speed_base);
+			softPwmWrite (PIN_PWM_LEFT,  TURNING_SPEED_MAX+active_config->speed_base);
+			softPwmWrite (PIN_PWM_RIGHT, TURNING_SPEED_MIN+active_config->speed_base);
 			break;
 		case CAR_STATE_ROTATING_LEFT:
 		case CAR_STATE_ROTATING_RIGHT:
-			softPwmWrite (PIN_PWM_LEFT,  ROTATING_SPEED+speed_base);
-			softPwmWrite (PIN_PWM_RIGHT, ROTATING_SPEED+speed_base);
+			softPwmWrite (PIN_PWM_LEFT,  ROTATING_SPEED+active_config->speed_base);
+			softPwmWrite (PIN_PWM_RIGHT, ROTATING_SPEED+active_config->speed_base);
 			break;
 	}
 }
@@ -733,12 +753,74 @@ void self_test() {
 	delay_ms(1000);
 	stop_collector();
 }
+
+//moving the car back and forth to get its speed
+int mesaure_speed() {
+    int duration_s = 4;
+
+    long distance1 = measure_front_distance_ex();
+    move_car_forward();
+    delay_ms(duration_s * 1000);
+    stop_car();
+    delay_ms(500); //wait for 1/2 second, then move back
+    long distance2 = measure_front_distance_ex();
+        
+    long distance3 = measure_front_distance_ex();
+    move_car_backward();
+    delay_ms(duration_s * 1000);
+    stop_car();
+    delay_ms(500); //wait for 1/2 second, then move forward
+    long distance4 = measure_front_distance_ex();
+
+    long speed1 = (distance1 - distance2) / duration_s;
+    long speed2 = (distance4 - distance3) / duration_s;
+    
+    return ((speed1 > speed2) ? speed1 : speed2);
+}
+
+//Move the car back and forth to get its speed and inc/dec the speed_base to adjust its speed to 
+//meet the one defined by the TARGET_CALIBRATION_SPEED
+bool speed_calibrate() {
+    turn_on_red_led();//we are going back to pause state
+    buzzle(false);
+    
+    int using_pin = PIN_LED_BLUE;
+    turn_on_led(using_pin);
+    int speed = 0, allowed_deviation=2;
+    bool calibrated = false;
+    long cutoff = current_time_ms() + 60 * 1000;//set a time limitation
+    while ((g_user_action != UA_DONE) && !calibrated) {
+        speed = mesaure_speed();
+        if (debug)
+            cout << "Current speed " << speed << "cm/s" << ",adjustment " << active_config->speed_base << endl;
+        if (abs(speed - TARGET_CALIBRATION_SPEED) <= allowed_deviation) {
+            calibrated = true;
+        }
+        else {
+            if (speed < TARGET_CALIBRATION_SPEED) {
+                active_config->speed_base += 2;
+            }
+            else if (speed > TARGET_CALIBRATION_SPEED){
+                active_config->speed_base -= 2;
+            }
+        }
+        if (current_time_ms() >= cutoff)
+            break;
+    }
+    turn_off_led(using_pin);
+    buzzle(false);
+    
+    return calibrated;
+}
 //recognize one ball and get its hsv color range. the idea is to take a background picture first(the led is stead on, frame 1), 
 //then put one ball in the background (the led is flashing) and get another picture(after the led stop flashing, frame 2). 
 //substract frame1 from frame 2 to get the ball picture only with all other areas as black. pixels will then be retrieved
 //from the ball picture(a cycle) and min/max hsv values will be calculated and saved to the configuration file.
-bool calibrate() {
-	turn_on_red_led();
+bool camera_calibrate() {
+	turn_on_red_led(); //as we are going back to pause state
+        
+    int using_pin = PIN_LED_GREEN;
+	turn_on_led(using_pin);
 	delay_ms(2000);
     buzzle(false);
     
@@ -760,15 +842,15 @@ bool calibrate() {
 		delay_ms(1000);
 		if (trying <= 5) {  //time for moving hands away
 			if ((trying & 1) == 0) {
-				turn_off_red_led();
+				turn_off_led(using_pin);
 			}
 			else {
-				turn_on_red_led();
+				turn_on_led(using_pin);
 			}
 			continue;
 		}
 		else {
-			turn_on_red_led(); //stays on
+			turn_on_led(using_pin); //stays on
 		}
 
 		Camera.grab();
@@ -871,12 +953,12 @@ bool calibrate() {
 			}
 			if (debug)
 				cout << "H=" << _minH << "-" << _maxH << ",S=" << _minS << "-" << _maxS << ",V=" << _minV << "-" << _maxV << endl;
-			minH=_minH;
-			maxH=_maxH;
-			minS=_minS;
-			maxS=_maxS;
-			minV=_minV;
-			maxV=_maxV;
+			active_config->minH=_minH;
+			active_config->maxH=_maxH;
+			active_config->minS=_minS;
+			active_config->maxS=_maxS;
+			active_config->minV=_minV;
+			active_config->maxV=_maxV;
 			found = true;
 		}
 		if (debug) {
@@ -893,7 +975,7 @@ bool calibrate() {
 			cv::imwrite("background2.jpg",frame);
 		}
 	}
-	turn_on_red_led(); //as we are going back to pause state
+    turn_off_led(using_pin);
 	if (debug) {
 		cout << "Done with calibration" << endl;
 	}
@@ -941,89 +1023,82 @@ long measure_front_distance(void)
 	return distance;
 }
 
+long measure_front_distance_ex(void) {
+    long distance = measure_front_distance();
+    long timestamp = current_time_ms() + 2000;//try at most two seconds
+    while (distance > 1000) {//a false measurement
+        delay_ms(200);
+        distance = measure_front_distance();
+        if (current_time_ms() >= timestamp)
+            break;
+    }
+    return distance;
+}
+
 //distance in cm
 long measure_rear_distance(void) {
 	return measure_distance(PIN_TRIG_REAR, PIN_ECHO_REAR);
 }
 
-//Process button events, running in a background thread
+//Process button events
 //button one is for changing the value
 //button two is for selecting options
 //options:
 //red on    - pause/resume
-//green on  - inc speed
-//blue on   - dec speed
-//green and blue on - calibrate
-void* btn_event_handle(void *arg) {
-    int wait_ms=1000;
-    while (g_user_action != UA_DONE) {
-        delay_ms(wait_ms);
-        int event = 0;
-        mtx_btn_event.lock();
-        if (btn_events.size() > 0) {
-            event = btn_events.at(0);
-            btn_events.erase(btn_events.begin());
+//green on  - camera calibration
+//blue on   - speed calibration
+void* btn_event_handle(int event) {
+    if (debug)
+        cout << "Btn event " << event <<", g state=" << g_user_action << endl;
+    if ((event & 0xff) == BTN_01) { //select options
+        switch (g_user_action) {
+            case UA_NONE:
+                g_user_action = UA_PAUSE;
+                turn_on_red_led();
+                turn_off_led(PIN_LED_GREEN);
+                turn_off_led(PIN_LED_BLUE);
+                break;
+            case UA_PAUSE:
+                g_user_action = UA_NONE;
+                turn_off_red_led();
+                turn_off_led(PIN_LED_GREEN);
+                turn_off_led(PIN_LED_BLUE);
+                break;
+            case UA_PRE_CAMERA_CALIBRATE:
+                g_user_action=UA_CAMERA_CALIBRATE;
+                turn_on_red_led();
+                turn_on_led(PIN_LED_GREEN);
+                turn_off_led(PIN_LED_BLUE);
+                break;
+            case UA_PRE_SPEED_CALIBRATE:
+                g_user_action=UA_SPEED_CALIBRATE;
+                turn_on_red_led();
+                turn_off_led(PIN_LED_GREEN);
+                turn_on_led(PIN_LED_BLUE);
+                break;
         }
-        mtx_btn_event.unlock();
-        if (event != 0) {
-            if (debug)
-                cout << "Btn event " << event <<", g state=" << g_user_action << endl;
-            if ((event & 0xff) == BTN_01) {
-                switch (g_user_action) {
-                    case UA_NONE:
-                        g_user_action = UA_PAUSE;
-                        break;
-                    case UA_PAUSE:
-                        g_user_action = UA_NONE;
-                        break;
-                    case UA_INC_SPEED:
-                        speed_base += 5;
-                        buzzle(false);
-                        break;
-                    case UA_DEC_SPEED:
-                        buzzle(false);
-                        if (speed_base >= 5)
-                            speed_base -= 5;
-                        else
-                            speed_base = 0;
-                        break;
-                    case UA_PRE_CALIBRATE:
-                        g_user_action=UA_CALIBRATE;
-                        turn_off_led(PIN_LED_GREEN);
-                        turn_off_led(PIN_LED_BLUE);
-                        //red led will be turned on by the calibrate function
-                        break;
-                }
-            }
-            else if ((event & 0xff) == BTN_02) {
-                //navigate through pause, inc speed, dec speed and pre_calibrate
-                switch (g_user_action) {
-                    case UA_PAUSE:
-                        g_user_action = UA_INC_SPEED;
-                        turn_off_red_led();
-                        turn_on_led(PIN_LED_GREEN);
-                        turn_off_led(PIN_LED_BLUE);
-                        break;
-                    case UA_INC_SPEED:
-                        g_user_action = UA_DEC_SPEED;
-                        turn_off_red_led();
-                        turn_off_led(PIN_LED_GREEN);
-                        turn_on_led(PIN_LED_BLUE);
-                        break;
-                    case UA_DEC_SPEED:
-                        g_user_action=UA_PRE_CALIBRATE;
-                        turn_off_red_led();
-                        turn_on_led(PIN_LED_GREEN);
-                        turn_on_led(PIN_LED_BLUE);
-                        break;
-                    case UA_PRE_CALIBRATE:
-                        g_user_action=UA_PAUSE;
-                        turn_on_red_led();
-                        turn_off_led(PIN_LED_GREEN);
-                        turn_off_led(PIN_LED_BLUE);
-                        break;
-                }
-            }
+    }
+    else if ((event & 0xff) == BTN_02) {
+        //navigate through pause, speed calibration and camera calibrate
+        switch (g_user_action) {
+            case UA_PAUSE:
+                g_user_action = UA_PRE_CAMERA_CALIBRATE;
+                turn_off_red_led();
+                turn_on_led(PIN_LED_GREEN);
+                turn_off_led(PIN_LED_BLUE);
+                break;
+            case UA_PRE_CAMERA_CALIBRATE:
+                g_user_action = UA_PRE_SPEED_CALIBRATE;
+                turn_off_red_led();
+                turn_off_led(PIN_LED_GREEN);
+                turn_on_led(PIN_LED_BLUE);
+                break;
+            case UA_PRE_SPEED_CALIBRATE:
+                g_user_action=UA_PAUSE;
+                turn_on_red_led();
+                turn_off_led(PIN_LED_GREEN);
+                turn_off_led(PIN_LED_BLUE);
+                break;
         }
     }
 }
@@ -1051,17 +1126,13 @@ void* observor(void *arg) {
 		if (digitalRead (PIN_BTN1) == HIGH) {
 			delay_ms(100);
 			if (digitalRead (PIN_BTN1) == HIGH) {
-                mtx_btn_event.lock();
-                btn_events.push_back(BTN_01);
-                mtx_btn_event.unlock();
+                btn_event_handle(BTN_01);
 			}
 		}
 		if (digitalRead (PIN_BTN2) == HIGH) {
 			delay_ms(100);
 			if (digitalRead (PIN_BTN2) == HIGH) {
-                mtx_btn_event.lock();
-                btn_events.push_back(BTN_02);
-                mtx_btn_event.unlock();
+                btn_event_handle(BTN_02);
 			}
 		}
 		delay_ms(frame_time_ms); //obstacle distance is updated in every frame
@@ -1084,17 +1155,17 @@ void* sensor(void *arg) {
 			cv::cvtColor (frame, hsv, CV_BGR2HSV);
 			 //gray color
 			cv::Mat mask = cv::Mat(frame.rows, frame.cols, CV_8UC1);
-			cv::inRange(hsv, cv::Scalar(minH, minS, minV), cv::Scalar(maxH, maxS, maxV), mask);
+			cv::inRange(hsv, cv::Scalar(active_config->minH, active_config->minS, active_config->minV), cv::Scalar(active_config->maxH, active_config->maxS, active_config->maxV), mask);
 			if (verbose)
 				cv::imwrite("step1.jpg",mask);    
 
 			//https://docs.opencv.org/3.4.2/db/df6/tutorial_erosion_dilatation.html
-			cv::Mat element1 = cv::getStructuringElement(cv::MORPH_RECT,cv::Size( 2*erosion_size + 1, 2*erosion_size+1 ), cv::Point( erosion_size, erosion_size ) );
+            cv::Mat element1 = cv::getStructuringElement(cv::MORPH_RECT,cv::Size( 2*active_config->erosion_size + 1, 2*active_config->erosion_size+1 ), cv::Point(active_config->erosion_size, active_config->erosion_size ) );
 			cv::erode(mask, mask, element1 );  
 			if (verbose)
 				cv::imwrite("step2.jpg",mask);       
 			
-			cv::Mat element2 = cv::getStructuringElement(cv::MORPH_RECT,cv::Size( 2*dilation_size + 1, 2*dilation_size+1 ),cv::Point( dilation_size, dilation_size ) );
+            cv::Mat element2 = cv::getStructuringElement(cv::MORPH_RECT,cv::Size( 2*active_config->dilation_size + 1, 2*active_config->dilation_size+1 ),cv::Point(active_config->dilation_size, active_config->dilation_size ) );
 			cv::dilate( mask, mask, element2 );
 			if (verbose)
 				cv::imwrite("step3.jpg",mask);            
@@ -1104,7 +1175,7 @@ void* sensor(void *arg) {
 			vector<cv::Vec4i> hierarchy;
 			cv::Mat canny_output;
 			
-			cv::Canny(mask, canny_output, canny_thresh, canny_thresh*2, 3 ); /// Detect edges using canny
+			cv::Canny(mask, canny_output, active_config->canny_thresh, active_config->canny_thresh*2, 3 ); /// Detect edges using canny
 			cv::findContours(canny_output, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE, cv::Point(0, 0) );/// Find contours
 
 			/// Draw contours
@@ -1115,7 +1186,7 @@ void* sensor(void *arg) {
 			vector<cv::Point> all_positions;
 			for( int i = 0; i < contours.size(); i++ ) {
 				int area = cv::contourArea(contours[i]);
-				if (area < min_area)
+				if (area < active_config->min_area)
 					continue;
 
 				cv::Moments mnt =  cv::moments( contours[i], false );
@@ -1128,7 +1199,7 @@ void* sensor(void *arg) {
 					
 				all_positions.push_back(center);
 				long distance = (long)diff_x * diff_x + (long)diff_y * diff_y;
-                int angle = (int)(atan(1.0 * diff_x / diff_y) * 180.0 / 3.14) + camera_deviation;
+                int angle = (int)(atan(1.0 * diff_x / diff_y) * 180.0 / 3.14);
                 if (abs(angle) < abs(min_angle))
                     min_angle = angle;
 				if (total++ <= 0 || (distance < min_distance)) {
@@ -1504,6 +1575,15 @@ int main ( int argc,char **argv ) {
 			g_user_action=UA_PAUSE;
 		}
 	}
+    if (g_context.venue == VENUE_INDOOR) {
+        active_config = &indoor_config;
+    }
+    else if (g_context.venue == VENUE_OUTDOOR) {
+        active_config = &outdoor_config;
+    }
+    else {
+        active_config = NULL;//shout throw an exception
+    }
 	//force to stop
     g_car_state=CAR_STATE_MOVING_BACKWARD;
     stop_car();
@@ -1524,8 +1604,6 @@ int main ( int argc,char **argv ) {
 	pthread_create(&thread_sensor, NULL, sensor, NULL);
 	pthread_t thread_observor;
 	pthread_create(&thread_observor, NULL, observor, NULL);
-	pthread_t thread_btn_event;
-	pthread_create(&thread_btn_event, NULL, btn_event_handle, NULL);
 
     //tap the button to start
 	while (g_user_action != UA_DONE) {
@@ -1556,8 +1634,16 @@ int main ( int argc,char **argv ) {
 				turn_on_red_led();
 				delay_ms(frame_time_ms);
 				break;
-			case UA_CALIBRATE:
-				if (calibrate()) {
+			case UA_SPEED_CALIBRATE:
+				if (speed_calibrate()) {
+					save_config();
+				}
+				if (g_user_action != UA_DONE) {
+					g_user_action=UA_PAUSE;
+				}
+				break;
+			case UA_CAMERA_CALIBRATE:
+				if (camera_calibrate()) {
 					save_config();
 				}
 				if (g_user_action != UA_DONE) {
@@ -1580,11 +1666,10 @@ int main ( int argc,char **argv ) {
 				delay_ms(1000);
 				break;
 			case UA_DEBUG:
-				move_car_forward();
-				delay_ms(4000);
+                speed_calibrate();
 				g_user_action=UA_DONE;
 				break;
-            default: //UA_INC_SPEED, UA_DEC_SPEED, UA_PRE_CALIBRATE, UA_WAITING
+            default: //UA_INC_SPEED, UA_DEC_SPEED, UA_PRE_CAMERA_CALIBRATE, UA_WAITING
 				delay_ms(1000);
 				break;
 		}//switch
@@ -1592,7 +1677,6 @@ int main ( int argc,char **argv ) {
 	g_turning_360=false;
     pthread_join(thread_sensor, NULL);
     pthread_join(thread_observor, NULL);
-    pthread_join(thread_btn_event, NULL);
     Camera.release();
     turn_off_red_led();
     turn_off_led(PIN_LED_GREEN);
