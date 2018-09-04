@@ -61,7 +61,8 @@
 #define MOVING_SPEED		12 //was 15
 #define TURNING_SPEED_MIN   10
 #define TURNING_SPEED_MAX   30
-#define ROTATING_SPEED		42 //was 42
+#define ROTATING_SPEED_FAST	58 //rotate the car fast, once find a ball slow down
+#define ROTATING_SPEED_SLOW 46 //was 42
 
 //ultra sound sensor
 #define PIN_TRIG_FRONT		15
@@ -80,9 +81,9 @@
 #define PIN_BUZZLE			3
 
 //time limitation for turning 90 degree
-#define MAX_TURNING_90_MS		18000
+#define MAX_TURNING_90_MS		8000
 
-#define WAIT_BALL_OUT_OF_SCENE_MS	1500 //after the ball is out of scene, wait for this time, then start the collector
+#define WAIT_BALL_OUT_OF_SCENE_MS	1800 //after the ball is out of scene, wait for this time, then start the collector
 #define WAIT_BALL_PICKUP_MS	        2000 //the time collector is running
 #define BACK_AFTER_PICKUP_MS		2000
 #define FRONT_DISTANCE_DANGEROUS	20 //cm
@@ -114,8 +115,10 @@
 #define CAR_STATE_TURNING_RIGHT_FORWARD		5
 #define CAR_STATE_TURNING_LEFT_BACKWARD		4 //two motors running in full speed, other two running in half speed, car is moving backward
 #define CAR_STATE_TURNING_RIGHT_BACKWARD	6
-#define CAR_STATE_ROTATING_LEFT				21
-#define CAR_STATE_ROTATING_RIGHT			23
+#define CAR_STATE_ROTATING_LEFT_SLOW		21
+#define CAR_STATE_ROTATING_RIGHT_SLOW		23
+#define CAR_STATE_ROTATING_LEFT_FAST		25
+#define CAR_STATE_ROTATING_RIGHT_FAST		27
 
 #define COLLECTOR_STATE_STOPPED			0
 #define COLLECTOR_STATE_RUNNING			1
@@ -410,10 +413,15 @@ void set_speed(int desired_state) {
 			softPwmWrite (PIN_PWM_LEFT,  TURNING_SPEED_MAX+active_config->speed_base);
 			softPwmWrite (PIN_PWM_RIGHT, TURNING_SPEED_MIN+active_config->speed_base);
 			break;
-		case CAR_STATE_ROTATING_LEFT:
-		case CAR_STATE_ROTATING_RIGHT:
-			softPwmWrite (PIN_PWM_LEFT,  ROTATING_SPEED+active_config->speed_base);
-			softPwmWrite (PIN_PWM_RIGHT, ROTATING_SPEED+active_config->speed_base);
+		case CAR_STATE_ROTATING_LEFT_FAST:
+		case CAR_STATE_ROTATING_RIGHT_FAST:
+			softPwmWrite (PIN_PWM_LEFT,  ROTATING_SPEED_FAST+active_config->speed_base);
+			softPwmWrite (PIN_PWM_RIGHT, ROTATING_SPEED_FAST+active_config->speed_base);
+			break;
+		case CAR_STATE_ROTATING_LEFT_SLOW:
+		case CAR_STATE_ROTATING_RIGHT_SLOW:
+			softPwmWrite (PIN_PWM_LEFT,  ROTATING_SPEED_SLOW+active_config->speed_base);
+			softPwmWrite (PIN_PWM_RIGHT, ROTATING_SPEED_SLOW+active_config->speed_base);
 			break;
 	}
 }
@@ -493,36 +501,69 @@ void turn_car_right_backward() {
 }
 
 //turn the car to the left at its current position
-void rotate_car_left() {
-	if (g_car_state==CAR_STATE_ROTATING_LEFT)
+void rotate_car_left_slow() {
+	if (g_car_state==CAR_STATE_ROTATING_LEFT_SLOW)
 		return;
 	if (debug)
-		cout << "%%%%%Rotating left" << endl;
-	set_speed(CAR_STATE_ROTATING_LEFT);
+		cout << "%%%%%Rotating left slow" << endl;
+	set_speed(CAR_STATE_ROTATING_LEFT_SLOW);
 	start_motor(MOTORS_LEFT, DIR_BACKWARD);
 	start_motor(MOTORS_RIGHT,DIR_FORWARD);
-	g_car_state=CAR_STATE_ROTATING_LEFT;
+	g_car_state=CAR_STATE_ROTATING_LEFT_SLOW;
 }
 
 //turn the car to the right at its current position
-void rotate_car_right() {
-	if (g_car_state==CAR_STATE_ROTATING_RIGHT)
+void rotate_car_right_slow() {
+	if (g_car_state==CAR_STATE_ROTATING_RIGHT_SLOW)
 		return;
 	if (debug)
-		cout << "%%%%%Rotating right" << endl;
-	set_speed(CAR_STATE_ROTATING_RIGHT);
+		cout << "%%%%%Rotating right slow" << endl;
+	set_speed(CAR_STATE_ROTATING_RIGHT_SLOW);
 	start_motor(MOTORS_LEFT, DIR_FORWARD);
 	start_motor(MOTORS_RIGHT,DIR_BACKWARD);
-	g_car_state=CAR_STATE_ROTATING_RIGHT;
+	g_car_state=CAR_STATE_ROTATING_RIGHT_SLOW;
+}
+
+//turn the car to the left at its current position
+void rotate_car_left_fast() {
+	if (g_car_state==CAR_STATE_ROTATING_LEFT_FAST)
+		return;
+	if (debug)
+		cout << "%%%%%Rotating left fast" << endl;
+	set_speed(CAR_STATE_ROTATING_LEFT_FAST);
+	start_motor(MOTORS_LEFT, DIR_BACKWARD);
+	start_motor(MOTORS_RIGHT,DIR_FORWARD);
+	g_car_state=CAR_STATE_ROTATING_LEFT_FAST;
+}
+
+//turn the car to the right at its current position
+void rotate_car_right_fast() {
+	if (g_car_state==CAR_STATE_ROTATING_RIGHT_FAST)
+		return;
+	if (debug)
+		cout << "%%%%%Rotating right fast" << endl;
+	set_speed(CAR_STATE_ROTATING_RIGHT_FAST);
+	start_motor(MOTORS_LEFT, DIR_FORWARD);
+	start_motor(MOTORS_RIGHT,DIR_BACKWARD);
+	g_car_state=CAR_STATE_ROTATING_RIGHT_FAST;
 }
 
 //rotate the car clockwise or counterclosewise
 //@param direction: TURNING_DIRECTION_CLOCKWISE or TURNING_DIRECTION_COUNTERCLOCKWISE
-void rotate_car(int direction) {
+void rotate_car_fast(int direction) {
 	if (direction == TURNING_DIRECTION_CLOCKWISE)
-		rotate_car_right();
+		rotate_car_right_fast();
 	else if (direction == TURNING_DIRECTION_COUNTERCLOCKWISE)
-		rotate_car_left();
+		rotate_car_left_fast();
+}
+
+//rotate the car clockwise or counterclosewise
+//@param direction: TURNING_DIRECTION_CLOCKWISE or TURNING_DIRECTION_COUNTERCLOCKWISE
+void rotate_car_slow(int direction) {
+	if (direction == TURNING_DIRECTION_CLOCKWISE)
+		rotate_car_right_slow();
+	else if (direction == TURNING_DIRECTION_COUNTERCLOCKWISE)
+		rotate_car_left_slow();
 }
 
 //stop all car motors
@@ -667,7 +708,7 @@ void workaround_obstacle(RobotCtx *ctx) {
 			return;
 		int direction = choose_turning_driection(ctx, false);
 		ctx->last_turn_direction = direction;
-		rotate_car(direction);
+		rotate_car_fast(direction);
 		delay_ms(1000);
 	}
 	else if (ctx->interruption == INT_REAR_OBSTACLE) {
@@ -1359,7 +1400,19 @@ bool targeting (RobotCtx *context, bool recovering) {
 			}
 			delay_ms(BACK_AFTER_PICKUP_MS);
 		}
-		rotate_car(direction);
+        if (!recovering) {
+            rotate_car_fast(direction);
+            found = false;
+            while (!found && (context->interruption == INT_NONE) && (current_time_ms() < till_ms)) {
+                delay_ms(frame_time_ms>>1);
+                if (g_user_action == UA_DONE || g_user_action == UA_PAUSE || !get_stable_scene(context))
+                    break;
+                if (context->scene.balls > 0) {
+                    found = true;
+                }
+            }
+        }
+        rotate_car_slow(direction);
 		found = false;
 		while (!found && (context->interruption == INT_NONE) && (current_time_ms() < till_ms)) {
 			delay_ms(frame_time_ms>>1);
