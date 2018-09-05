@@ -1,5 +1,6 @@
 # Tennis
 An automatic tennis ball collector
+https://www.youtube.com/watch?v=kNfaKZQVuDg
 
 ## Hardware (total cost around $480)
 * Raspberry Pi 3 B+ with opencv(http://www.opencv.org), raspicam(https://github.com/cedricve/raspicam) and WiringPi installed
@@ -8,9 +9,9 @@ An automatic tennis ball collector
 * A heavy duty DC motor(12V)
 * Three motor controllers (L298N)
 * Two ultra sound sensors
-* A led
-* An active buzzle
-* A button
+* Three leds (R,G and B)
+* An active buzzers
+* Two buttons
 * Wires
 * Breadboard
 * Resistors
