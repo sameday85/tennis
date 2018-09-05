@@ -58,11 +58,11 @@
 #define PWM_MAX             100
 
 #define TARGET_CALIBRATION_SPEED     16 //cm per second, for calibrating the motor speed
-#define MOVING_SPEED        12 //was 15
+#define MOVING_SPEED        14 //was 15
 #define TURNING_SPEED_MIN   10
 #define TURNING_SPEED_MAX   30
-#define ROTATING_SPEED_FAST 58 //rotate the car fast, once find a ball slow down, was 58
-#define ROTATING_SPEED_SLOW 46 //was 42
+#define ROTATING_SPEED_FAST 58 //rotate the car fast, once find a ball slow down
+#define ROTATING_SPEED_SLOW 30 //
 
 //ultra sound sensor
 #define PIN_TRIG_FRONT      15
@@ -78,7 +78,7 @@
 #define PIN_LED_GREEN       13
 #define PIN_LED_BLUE        14
 
-#define PIN_BUZZLE          3
+#define PIN_BUZZER          3
 
 //time limitation for turning 90 degree in fast speed
 #define MAX_TURNING_90_MS       4000
@@ -86,8 +86,8 @@
 #define WAIT_BALL_OUT_OF_SCENE_MS   1800 //after the ball is out of scene, wait for this time, then start the collector
 #define WAIT_BALL_PICKUP_MS         2000 //the time collector is running
 #define BACK_AFTER_PICKUP_MS        2000
-#define FRONT_DISTANCE_DANGEROUS    20 //cm
-#define REAR_DISTANCE_DANGEROUS     10 //cm
+#define FRONT_DISTANCE_DANGEROUS    8 //cm
+#define REAR_DISTANCE_DANGEROUS     20 //cm
 
 #define PIXEL_DISTANCE_PICK_FAR     180 //far point, at which the ball can be picked up
 #define PICKUP_ANGLE_FAR            45  //was 45
@@ -123,10 +123,10 @@
 #define COLLECTOR_STATE_STOPPED         0
 #define COLLECTOR_STATE_RUNNING         1
 
-#define TURNING_DIRECTION_UNKNOWN           0 //low byte
-#define TURNING_DIRECTION_CLOCKWISE         1 //low byte
-#define TURNING_DIRECTION_COUNTERCLOCKWISE  2 //low byte
-#define MASK_TURNING_BACK_FIRST             0x0100 //high byte, move the car back first
+#define TURNING_DIRECTION_UNKNOWN           0
+#define TURNING_DIRECTION_CLOCKWISE         1
+#define TURNING_DIRECTION_COUNTERCLOCKWISE  2
+
 //user actions
 #define UA_NONE                 0
 #define UA_PAUSE                1
@@ -195,7 +195,6 @@ RobotConfig indoor_config, outdoor_config, *active_config;
 int frames_per_second, frame_time_ms; //image capturing
 
 int g_car_state, g_collector_state;
-bool g_turning_360;
 bool g_is_led_on; //red led
 
 int g_user_action;
@@ -394,33 +393,26 @@ void stop_motor(int motor) {
     digitalWrite(pin2, LOW);
 }
 
+//set the speed for the left and right motors
+void set_speed_left_right(int left_speed, int right_speed) {
+    softPwmWrite (PIN_PWM_LEFT,  left_speed);
+    softPwmWrite (PIN_PWM_RIGHT, right_speed);
+}
+
 //set the motor speed for the given car state
 void set_speed(int desired_state) {
     switch (desired_state) {
         case CAR_STATE_MOVING_FORWARD:
         case CAR_STATE_MOVING_BACKWARD:
-            softPwmWrite (PIN_PWM_LEFT,  MOVING_SPEED+active_config->speed_base);
-            softPwmWrite (PIN_PWM_RIGHT, MOVING_SPEED+active_config->speed_base);
+            set_speed_left_right(MOVING_SPEED+active_config->speed_base, MOVING_SPEED+active_config->speed_base);
             break;
         case CAR_STATE_TURNING_LEFT_FORWARD:
         case CAR_STATE_TURNING_RIGHT_BACKWARD: //car header direction change
-            softPwmWrite (PIN_PWM_LEFT,  TURNING_SPEED_MIN+active_config->speed_base); 
-            softPwmWrite (PIN_PWM_RIGHT, TURNING_SPEED_MAX+active_config->speed_base);
+            set_speed_left_right(TURNING_SPEED_MIN+active_config->speed_base, TURNING_SPEED_MAX+active_config->speed_base);
             break;
         case CAR_STATE_TURNING_RIGHT_FORWARD:
         case CAR_STATE_TURNING_LEFT_BACKWARD: //car header direction change
-            softPwmWrite (PIN_PWM_LEFT,  TURNING_SPEED_MAX+active_config->speed_base);
-            softPwmWrite (PIN_PWM_RIGHT, TURNING_SPEED_MIN+active_config->speed_base);
-            break;
-        case CAR_STATE_ROTATING_LEFT_FAST:
-        case CAR_STATE_ROTATING_RIGHT_FAST:
-            softPwmWrite (PIN_PWM_LEFT,  ROTATING_SPEED_FAST+active_config->speed_base);
-            softPwmWrite (PIN_PWM_RIGHT, ROTATING_SPEED_FAST+active_config->speed_base);
-            break;
-        case CAR_STATE_ROTATING_LEFT_SLOW:
-        case CAR_STATE_ROTATING_RIGHT_SLOW:
-            softPwmWrite (PIN_PWM_LEFT,  ROTATING_SPEED_SLOW+active_config->speed_base);
-            softPwmWrite (PIN_PWM_RIGHT, ROTATING_SPEED_SLOW+active_config->speed_base);
+            set_speed_left_right(TURNING_SPEED_MAX+active_config->speed_base, TURNING_SPEED_MIN+active_config->speed_base);
             break;
     }
 }
@@ -499,72 +491,6 @@ void turn_car_right_backward() {
     g_car_state=CAR_STATE_TURNING_RIGHT_BACKWARD;
 }
 
-//turn the car to the left at its current position
-void rotate_car_left_slow() {
-    if (g_car_state==CAR_STATE_ROTATING_LEFT_SLOW)
-        return;
-    if (debug)
-        cout << "%%%%%Rotating left slow" << endl;
-    set_speed(CAR_STATE_ROTATING_LEFT_SLOW);
-    start_motor(MOTORS_LEFT, DIR_BACKWARD);
-    start_motor(MOTORS_RIGHT,DIR_FORWARD);
-    g_car_state=CAR_STATE_ROTATING_LEFT_SLOW;
-}
-
-//turn the car to the right at its current position
-void rotate_car_right_slow() {
-    if (g_car_state==CAR_STATE_ROTATING_RIGHT_SLOW)
-        return;
-    if (debug)
-        cout << "%%%%%Rotating right slow" << endl;
-    set_speed(CAR_STATE_ROTATING_RIGHT_SLOW);
-    start_motor(MOTORS_LEFT, DIR_FORWARD);
-    start_motor(MOTORS_RIGHT,DIR_BACKWARD);
-    g_car_state=CAR_STATE_ROTATING_RIGHT_SLOW;
-}
-
-//turn the car to the left at its current position
-void rotate_car_left_fast() {
-    if (g_car_state==CAR_STATE_ROTATING_LEFT_FAST)
-        return;
-    if (debug)
-        cout << "%%%%%Rotating left fast" << endl;
-    set_speed(CAR_STATE_ROTATING_LEFT_FAST);
-    start_motor(MOTORS_LEFT, DIR_BACKWARD);
-    start_motor(MOTORS_RIGHT,DIR_FORWARD);
-    g_car_state=CAR_STATE_ROTATING_LEFT_FAST;
-}
-
-//turn the car to the right at its current position
-void rotate_car_right_fast() {
-    if (g_car_state==CAR_STATE_ROTATING_RIGHT_FAST)
-        return;
-    if (debug)
-        cout << "%%%%%Rotating right fast" << endl;
-    set_speed(CAR_STATE_ROTATING_RIGHT_FAST);
-    start_motor(MOTORS_LEFT, DIR_FORWARD);
-    start_motor(MOTORS_RIGHT,DIR_BACKWARD);
-    g_car_state=CAR_STATE_ROTATING_RIGHT_FAST;
-}
-
-//rotate the car clockwise or counterclosewise
-//@param direction: TURNING_DIRECTION_CLOCKWISE or TURNING_DIRECTION_COUNTERCLOCKWISE
-void rotate_car_fast(int direction) {
-    if (direction == TURNING_DIRECTION_CLOCKWISE)
-        rotate_car_right_fast();
-    else if (direction == TURNING_DIRECTION_COUNTERCLOCKWISE)
-        rotate_car_left_fast();
-}
-
-//rotate the car clockwise or counterclosewise
-//@param direction: TURNING_DIRECTION_CLOCKWISE or TURNING_DIRECTION_COUNTERCLOCKWISE
-void rotate_car_slow(int direction) {
-    if (direction == TURNING_DIRECTION_CLOCKWISE)
-        rotate_car_right_slow();
-    else if (direction == TURNING_DIRECTION_COUNTERCLOCKWISE)
-        rotate_car_left_slow();
-}
-
 //stop all car motors
 void stop_car() {
     if (g_car_state==CAR_STATE_STOPPED)
@@ -576,69 +502,84 @@ void stop_car() {
     g_car_state=CAR_STATE_STOPPED;
 }
 
-//turning the car slow by moving the car back and forth with one side motors running a little bit fast and other side motor running a little bit slow. 
-//will stop moving once the global variable g_turning_360 is set to false
+//rotatation in-situ: turning the car at its current position.
 //this function will be running in a background.
-void* _turn_car_360(void *arg) {
-    g_turning_360 = true;
-    int direction =*((int*)arg);
-    bool clockwise = ((direction & 0xff) == TURNING_DIRECTION_CLOCKWISE);
-    bool back_first = (direction & MASK_TURNING_BACK_FIRST) != 0;
-    int desired_car_states[2];
-    int duration_ms[2], step=500;
-    if (clockwise) {
-        desired_car_states[0]=CAR_STATE_TURNING_RIGHT_FORWARD;
-        desired_car_states[1]=CAR_STATE_TURNING_RIGHT_BACKWARD;
-    }
-    else {
-        desired_car_states[0]=CAR_STATE_TURNING_LEFT_FORWARD;
-        desired_car_states[1]=CAR_STATE_TURNING_LEFT_BACKWARD;
-    }
-    duration_ms[0]=1500; //forward
-    duration_ms[1]=1000; //backward
-    if (back_first) {
-        //swap
-        int t = duration_ms[0];
-        duration_ms[0]=duration_ms[1];
-        duration_ms[1]=t;
-        
-        t = desired_car_states[0];
-        desired_car_states[0]=desired_car_states[1];
-        desired_car_states[1]=t;
-    }
-    for (int i = 0; i < 20 && g_turning_360; ++i) {
-        switch (desired_car_states[i & 1]) {
-            case CAR_STATE_TURNING_LEFT_FORWARD:
-            turn_car_left_forward();
-            break;
-            case CAR_STATE_TURNING_LEFT_BACKWARD:
-            turn_car_left_backward();
-            break;
-            case CAR_STATE_TURNING_RIGHT_FORWARD:
-            turn_car_right_forward();
-            break;
-            case CAR_STATE_TURNING_RIGHT_BACKWARD:
-            turn_car_right_backward();
-            break;
+//@param arg - integer pointer to the desired car state
+void* _rotate_car_bg(void *arg) {
+    int state =*((int*)arg);
+
+    bool clockwise = (state == CAR_STATE_ROTATING_RIGHT_FAST || state == CAR_STATE_ROTATING_RIGHT_SLOW);
+    bool fast = (state == CAR_STATE_ROTATING_LEFT_FAST || state == CAR_STATE_ROTATING_RIGHT_FAST);
+    int idle_speed = 2;
+    int speed = active_config->speed_base + (fast ? ROTATING_SPEED_FAST : ROTATING_SPEED_SLOW);
+    int duration_ms= fast ? 1000 : 2000;
+    
+    int dir = 0;
+    while (g_user_action != UA_DONE) {
+        if (dir == 0) {//move forward
+            if (clockwise) {
+                set_speed_left_right(speed , idle_speed);
+            }
+            else {
+                set_speed_left_right(idle_speed, speed);
+            }
+            start_motor(MOTORS_LEFT, DIR_FORWARD);
+            start_motor(MOTORS_RIGHT, DIR_FORWARD);
         }
-        int state_ms = duration_ms[i&1];
-        for (int j = 0; (j < state_ms / step) && g_turning_360; ++j) {
-            delay_ms(step);
+        else {//move backward
+            if (clockwise) {
+                set_speed_left_right(idle_speed, speed);
+            }
+            else {
+                set_speed_left_right(speed, idle_speed);
+            }
+            start_motor(MOTORS_LEFT, DIR_BACKWARD);
+            start_motor(MOTORS_RIGHT, DIR_BACKWARD);
         }
+        if (g_car_state != state)
+            break;
+        delay_ms(duration_ms);
+        if (g_car_state != state)
+            break;
+        dir = 1 - dir; //reverse
     }
     if (debug)
-        cout << "Exited from turning car thread ...." << endl;
+        cout << "Exited from rotating car thread ...." << endl;
 
     return NULL;
 }
 
-//turn the car slowly. this will be done by starting a new background thread to run the above _turn_car_360 function
+//Rotate the car in a background thread
+void _rotate_car(int to_state) {
+    static int rotate_to_state;
+    rotate_to_state = to_state;
+    
+    pthread_t thread_rotating_car;
+    pthread_create(&thread_rotating_car, NULL, _rotate_car_bg, &rotate_to_state);
+}
+
+//rotate the car fast.
 //@param _direction: closewise or anticlockwise
-void turn_car_360(int _direction) {
-    static int direction;
-    direction = _direction;
-    pthread_t thread_turning_car;
-    pthread_create(&thread_turning_car, NULL, _turn_car_360, &direction);
+void rotate_car_fast(int _direction) {
+    int desired_car_states = (_direction == TURNING_DIRECTION_CLOCKWISE) ? CAR_STATE_ROTATING_RIGHT_FAST : CAR_STATE_ROTATING_LEFT_FAST;
+    if (g_car_state == desired_car_states)
+        return;
+    if (debug)
+        cout << "%%%%%Rotating car fast " << desired_car_states << endl;
+    _rotate_car(desired_car_states);
+    g_car_state = desired_car_states;
+}
+
+//rotate the car slowly.
+//@param _direction: closewise or anticlockwise
+void rotate_car_slow(int _direction) {
+    int desired_car_states = (_direction == TURNING_DIRECTION_CLOCKWISE) ? CAR_STATE_ROTATING_RIGHT_SLOW : CAR_STATE_ROTATING_LEFT_SLOW;
+    if (g_car_state == desired_car_states)
+        return;
+    if (debug)
+        cout << "%%%%%Rotating car slow " << desired_car_states << endl;
+    _rotate_car(desired_car_states);
+    g_car_state = desired_car_states;
 }
 
 //determine what direction we should turn the car
@@ -753,12 +694,12 @@ void turn_off_red_led() {
 
 //make a long or shot buzzle
 void buzzle (bool long_time) {
-    digitalWrite(PIN_BUZZLE, HIGH);
+    digitalWrite(PIN_BUZZER, HIGH);
     delay_ms(long_time ? 2000 : 300);
-    digitalWrite(PIN_BUZZLE, LOW);
+    digitalWrite(PIN_BUZZER, LOW);
 }
 
-//perform self test. this will test the robot car motors, collector, led  and buzzle.
+//perform self test. this will test the robot car motors, collector, led and buzzer.
 //it is better to lift the car up when run this test.
 void self_test() {
     buzzle (true);
@@ -1135,8 +1076,7 @@ void* btn_event_handle(int event) {
                 break;
         }
     }
-    else if ((event & 0xff) == BTN_02) {
-        //navigate through pause, speed calibration and camera calibrate
+    else if ((event & 0xff) == BTN_02) {//navigate through pause, speed calibration and camera calibrate
         switch (g_user_action) {
             case UA_PAUSE:
                 g_user_action = UA_PRE_CAMERA_CALIBRATE;
@@ -1432,15 +1372,25 @@ bool targeting (RobotCtx *context, bool recovering) {
     }
     if (found && (is_ready_pickup(&context->scene) || abs(context->scene.angle) <= PERFECT_ANGLE))
         return found;
+    int last_angle = context->scene.angle;
+    int direction = (last_angle > 0 ? TURNING_DIRECTION_CLOCKWISE : TURNING_DIRECTION_COUNTERCLOCKWISE);
     //If the car is too close to the ball, move back a little bit
-    int mask = is_covered(&context->scene, false) ? 0 : MASK_TURNING_BACK_FIRST;
+    if (!is_covered(&context->scene, false)) {
+        if (direction == TURNING_DIRECTION_CLOCKWISE) {
+            turn_car_right_backward();
+        }
+        else if (direction == TURNING_DIRECTION_COUNTERCLOCKWISE) {
+            turn_car_left_backward();
+        }
+        delay_ms(1000);
+    }
+    //step 2, rotating the car to target the ball
+    rotate_car_slow(direction);
     { 
-        //step 2, move back and forth to target the ball
-        int last_angle = context->scene.angle, this_angle=0;
-        turn_car_360(mask | (last_angle > 0 ? TURNING_DIRECTION_CLOCKWISE : TURNING_DIRECTION_COUNTERCLOCKWISE));
         //reset again
         found = false;
         long till_ms = current_time_ms() + MAX_TURNING_90_MS * 4;
+        int this_angle = last_angle;
         while (!found && (context->interruption == INT_NONE) && (current_time_ms() < till_ms)) {
             delay_ms(frame_time_ms>>1);
             if (g_user_action == UA_DONE || g_user_action == UA_PAUSE || !get_stable_scene(context))
@@ -1453,7 +1403,6 @@ bool targeting (RobotCtx *context, bool recovering) {
                 last_angle = this_angle;
             }
         }
-        g_turning_360 = false;
     }
     return found;
 }
@@ -1566,11 +1515,11 @@ void picking_up(RobotCtx *ctx) {
                     get_stable_scene(ctx);
                 }
                 if (g_user_action == UA_NONE && ctx->interruption == INT_NONE) {//we are still moving
-                    turn_on_led(PIN_LED_GREEN);
+                    turn_on_led(PIN_LED_GREEN);//green led on
                     delay_ms(WAIT_BALL_OUT_OF_SCENE_MS);
                     stop_car();
                     delay_ms(WAIT_BALL_PICKUP_MS);
-                    turn_off_led(PIN_LED_GREEN);
+                    turn_off_led(PIN_LED_GREEN);//green led off
                     ++ctx->balls_collected;
                     picked_one = true;
                 }
@@ -1606,8 +1555,8 @@ int main ( int argc,char **argv ) {
     pinMode(PIN_LED_RED,    OUTPUT);
     pinMode(PIN_LED_GREEN,  OUTPUT);
     pinMode(PIN_LED_BLUE,   OUTPUT);
-    pinMode(PIN_BUZZLE, OUTPUT);
-    digitalWrite(PIN_BUZZLE, LOW);
+    pinMode(PIN_BUZZER, OUTPUT);
+    digitalWrite(PIN_BUZZER, LOW);
     
     softPwmCreate (PIN_PWM_LEFT,  0, PWM_MAX) ;
     softPwmCreate (PIN_PWM_RIGHT, 0, PWM_MAX) ;
@@ -1732,7 +1681,7 @@ int main ( int argc,char **argv ) {
                 }
                 break;
             case UA_TEST_MOTOR:
-                turn_car_360(TURNING_DIRECTION_CLOCKWISE);
+                rotate_car_fast(TURNING_DIRECTION_CLOCKWISE);
                 g_user_action=UA_WAITING;
                 break;
             case UA_TEST_COLLECTOR:
@@ -1744,7 +1693,7 @@ int main ( int argc,char **argv ) {
                 delay_ms(1000);
                 break;
             case UA_DEBUG:
-                rotate_car_left_fast();
+                rotate_car_slow(TURNING_DIRECTION_COUNTERCLOCKWISE);
                 g_user_action=UA_WAITING;
                 break;
             default: //UA_PAUSE, UA_PRE_SPEED_CALIBRATE, UA_PRE_CAMERA_CALIBRATE, UA_WAITING, UA_TEST_CAMERA etc
@@ -1754,7 +1703,6 @@ int main ( int argc,char **argv ) {
     } //while
     
     //exiting
-    g_turning_360=false;
     pthread_join(thread_sensor, NULL);
     pthread_join(thread_observor, NULL);
     Camera.release();
@@ -1762,8 +1710,8 @@ int main ( int argc,char **argv ) {
     turn_off_led(PIN_LED_RED);
     turn_off_led(PIN_LED_GREEN);
     turn_off_led(PIN_LED_BLUE);
-    //stop buzzle
-    digitalWrite(PIN_BUZZLE, LOW);
+    //stop buzzer
+    digitalWrite(PIN_BUZZER, LOW);
     //stop all motors
     stop_car();
     stop_collector();
