@@ -123,9 +123,9 @@
 #define COLLECTOR_STATE_STOPPED         0
 #define COLLECTOR_STATE_RUNNING         1
 
-#define TURNING_DIRECTION_UNKNOWN           0
-#define TURNING_DIRECTION_CLOCKWISE         1
-#define TURNING_DIRECTION_COUNTERCLOCKWISE  2
+#define TURNING_DIRECTION_UNKNOWN       0
+#define TURNING_DIRECTION_RIGHT         1
+#define TURNING_DIRECTION_LEFT          2
 
 //user actions
 #define UA_NONE                 0
@@ -261,7 +261,7 @@ void load_config() {
     indoor_config.minS = 170; indoor_config.maxS = 255; //0-255
     indoor_config.minV = 70;  indoor_config.maxV = 155; //0-255
     indoor_config.erosion_size = 3;
-    indoor_config.dilation_size= 10;
+    indoor_config.dilation_size= 4;
     indoor_config.canny_thresh = 100;
     indoor_config.min_area = 4;
     memcpy(&outdoor_config, &indoor_config, sizeof (RobotConfig));
@@ -561,7 +561,7 @@ void _rotate_car(int to_state) {
 //rotate the car fast.
 //@param _direction: closewise or anticlockwise
 void rotate_car_fast(int _direction) {
-    int desired_car_states = (_direction == TURNING_DIRECTION_CLOCKWISE) ? CAR_STATE_ROTATING_RIGHT_FAST : CAR_STATE_ROTATING_LEFT_FAST;
+    int desired_car_states = (_direction == TURNING_DIRECTION_RIGHT) ? CAR_STATE_ROTATING_RIGHT_FAST : CAR_STATE_ROTATING_LEFT_FAST;
     if (g_car_state == desired_car_states)
         return;
     if (debug)
@@ -573,7 +573,7 @@ void rotate_car_fast(int _direction) {
 //rotate the car slowly.
 //@param _direction: closewise or anticlockwise
 void rotate_car_slow(int _direction) {
-    int desired_car_states = (_direction == TURNING_DIRECTION_CLOCKWISE) ? CAR_STATE_ROTATING_RIGHT_SLOW : CAR_STATE_ROTATING_LEFT_SLOW;
+    int desired_car_states = (_direction == TURNING_DIRECTION_RIGHT) ? CAR_STATE_ROTATING_RIGHT_SLOW : CAR_STATE_ROTATING_LEFT_SLOW;
     if (g_car_state == desired_car_states)
         return;
     if (debug)
@@ -585,7 +585,7 @@ void rotate_car_slow(int _direction) {
 //determine what direction we should turn the car
 //@param recovering - true if we just lost tracking a ball and wanted to get it back
 int choose_turning_driection(RobotCtx *ctx, bool recovering) {
-    int direction = TURNING_DIRECTION_COUNTERCLOCKWISE;
+    int direction = TURNING_DIRECTION_LEFT;
     if (recovering) {
         //we lost the ball, try to get it back
         if (ctx->last_scene_w_balls.angle <= 0) {
@@ -595,7 +595,7 @@ int choose_turning_driection(RobotCtx *ctx, bool recovering) {
         else {
             if (debug)
                 cout << "Decision 2" << endl;
-            direction = TURNING_DIRECTION_CLOCKWISE;
+            direction = TURNING_DIRECTION_RIGHT;
         }
     }
     else {
@@ -604,7 +604,7 @@ int choose_turning_driection(RobotCtx *ctx, bool recovering) {
             if (ctx->last_scene_w_balls.nearest_ball_at_left < ctx->last_scene_w_balls.nearest_ball_at_right) {
                 if (debug)
                     cout << "Decision 3" << endl;
-                direction = TURNING_DIRECTION_CLOCKWISE;
+                direction = TURNING_DIRECTION_RIGHT;
             }
             else if (ctx->last_scene_w_balls.nearest_ball_at_left > ctx->last_scene_w_balls.nearest_ball_at_right) {
                 if (debug)
@@ -623,7 +623,7 @@ int choose_turning_driection(RobotCtx *ctx, bool recovering) {
         else if (ctx->last_scene_w_balls.balls_at_right > 0) {
             if (debug)
                 cout << "Decision 7" << endl;
-            direction = TURNING_DIRECTION_CLOCKWISE;
+            direction = TURNING_DIRECTION_RIGHT;
         }
         else if (ctx->last_scene_w_balls.angle <= 0) {
             if (debug)
@@ -636,7 +636,7 @@ int choose_turning_driection(RobotCtx *ctx, bool recovering) {
         }
     }
     if (direction == TURNING_DIRECTION_UNKNOWN)
-        direction = TURNING_DIRECTION_CLOCKWISE;
+        direction = TURNING_DIRECTION_RIGHT;
     return direction;
 }
 //workaround the front or rear obstacle. do nothing for rear obstacle as the car already stopped.
@@ -750,7 +750,7 @@ void self_test() {
 }
 
 //moving the car back and forth to get its speed
-int mesaure_speed() {
+int measure_speed() {
     int duration_s = 4;
 
     long distance1 = measure_front_distance_ex();
@@ -785,7 +785,7 @@ bool speed_calibrate() {
     bool calibrated = false;
     long cutoff = current_time_ms() + 60 * 1000;//set a time limitation
     while ((g_user_action != UA_DONE) && !calibrated) {
-        speed = mesaure_speed();
+        speed = measure_speed();
         if (debug)
             cout << "Current speed " << speed << "cm/s" << ",adjustment " << active_config->speed_base << endl;
         if (abs(speed - TARGET_CALIBRATION_SPEED) <= allowed_deviation) {
@@ -1144,36 +1144,44 @@ void* sensor(void *arg) {
     bool verbose = debug && (g_user_action == UA_TEST_CAMERA);
     cv::Mat frame;
     long frame_start;
+    
+    //erosion & dilation sizes will not change
+    cv::Mat element1 = cv::getStructuringElement(cv::MORPH_RECT,cv::Size( 2*active_config->erosion_size + 1, 2*active_config->erosion_size+1 ), cv::Point(active_config->erosion_size, active_config->erosion_size));
+    cv::Mat element2 = cv::getStructuringElement(cv::MORPH_RECT,cv::Size( 2*active_config->dilation_size + 1, 2*active_config->dilation_size+1 ),cv::Point(active_config->dilation_size, active_config->dilation_size));
     while (g_user_action != UA_DONE) {
         frame_start = current_time_ms();
         if (g_user_action == UA_NONE || g_user_action == UA_TEST_CAMERA || g_user_action == UA_TEST_SELF) {
+            //this will take abount 17ms
             Camera.grab();
             Camera.retrieve (frame);
 
+            //this will take about 25ms
             cv::Mat hsv;
             cv::cvtColor (frame, hsv, CV_BGR2HSV);
+
+            //this will take about 36ms
              //gray color
             cv::Mat mask = cv::Mat(frame.rows, frame.cols, CV_8UC1);
             cv::inRange(hsv, cv::Scalar(active_config->minH, active_config->minS, active_config->minV), cv::Scalar(active_config->maxH, active_config->maxS, active_config->maxV), mask);
             if (verbose)
                 cv::imwrite("step1.jpg",mask);    
 
+            //this wil take about 72ms
             //https://docs.opencv.org/3.4.2/db/df6/tutorial_erosion_dilatation.html
-            cv::Mat element1 = cv::getStructuringElement(cv::MORPH_RECT,cv::Size( 2*active_config->erosion_size + 1, 2*active_config->erosion_size+1 ), cv::Point(active_config->erosion_size, active_config->erosion_size ) );
-            cv::erode(mask, mask, element1 );  
+            cv::erode(mask, mask, element1);  
             if (verbose)
                 cv::imwrite("step2.jpg",mask);       
             
-            cv::Mat element2 = cv::getStructuringElement(cv::MORPH_RECT,cv::Size( 2*active_config->dilation_size + 1, 2*active_config->dilation_size+1 ),cv::Point(active_config->dilation_size, active_config->dilation_size ) );
-            cv::dilate( mask, mask, element2 );
+            //this will take about 88ms(200ms if the kernel size is 10!)
+            cv::dilate( mask, mask, element2);
             if (verbose)
                 cv::imwrite("step3.jpg",mask);            
-                
-            //find contours
+            
+            //find contours. this will take about 36ms
             vector<vector<cv::Point> > contours;
             vector<cv::Vec4i> hierarchy;
             cv::Mat canny_output;
-            
+
             cv::Canny(mask, canny_output, active_config->canny_thresh, active_config->canny_thresh*2, 3 ); /// Detect edges using canny
             cv::findContours(canny_output, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE, cv::Point(0, 0) );/// Find contours
 
@@ -1322,13 +1330,13 @@ bool targeting (RobotCtx *context, bool recovering) {
         long till_ms = current_time_ms() + MAX_TURNING_90_MS * 4;//for 360 degree
         int direction = TURNING_DIRECTION_UNKNOWN;
         if (context->scene.balls > 0) {
-            direction = context->scene.angle > 0 ? TURNING_DIRECTION_CLOCKWISE : TURNING_DIRECTION_COUNTERCLOCKWISE;
+            direction = context->scene.angle > 0 ? TURNING_DIRECTION_RIGHT : TURNING_DIRECTION_LEFT;
         }
         else {
             direction = choose_turning_driection(context, recovering);
         }
         if ((context->scene.balls <= 0) && context->consecutive_collected > 0) {
-            if (direction == TURNING_DIRECTION_CLOCKWISE) {
+            if (direction == TURNING_DIRECTION_RIGHT) {
                 turn_car_right_backward();
             }
             else {
@@ -1358,9 +1366,9 @@ bool targeting (RobotCtx *context, bool recovering) {
                 if (abs(context->scene.angle) <= PERFECT_ANGLE) {
                     found = true;
                 }
-                else if ((context->scene.angle < 0) && (direction == TURNING_DIRECTION_COUNTERCLOCKWISE))
+                else if ((context->scene.angle < 0) && (direction == TURNING_DIRECTION_LEFT))
                     continue;
-                else if ((context->scene.angle > 0) && (direction == TURNING_DIRECTION_CLOCKWISE))
+                else if ((context->scene.angle > 0) && (direction == TURNING_DIRECTION_RIGHT))
                     continue;
                 else {
                     found = true;
@@ -1373,13 +1381,13 @@ bool targeting (RobotCtx *context, bool recovering) {
     if (found && (is_ready_pickup(&context->scene) || abs(context->scene.angle) <= PERFECT_ANGLE))
         return found;
     int last_angle = context->scene.angle;
-    int direction = (last_angle > 0 ? TURNING_DIRECTION_CLOCKWISE : TURNING_DIRECTION_COUNTERCLOCKWISE);
+    int direction = (last_angle > 0 ? TURNING_DIRECTION_RIGHT : TURNING_DIRECTION_LEFT);
     //If the car is too close to the ball, move back a little bit
     if (!is_covered(&context->scene, false)) {
-        if (direction == TURNING_DIRECTION_CLOCKWISE) {
+        if (direction == TURNING_DIRECTION_RIGHT) {
             turn_car_right_backward();
         }
-        else if (direction == TURNING_DIRECTION_COUNTERCLOCKWISE) {
+        else if (direction == TURNING_DIRECTION_LEFT) {
             turn_car_left_backward();
         }
         delay_ms(1000);
@@ -1681,7 +1689,7 @@ int main ( int argc,char **argv ) {
                 }
                 break;
             case UA_TEST_MOTOR:
-                rotate_car_fast(TURNING_DIRECTION_CLOCKWISE);
+                rotate_car_fast(TURNING_DIRECTION_RIGHT);
                 g_user_action=UA_WAITING;
                 break;
             case UA_TEST_COLLECTOR:
@@ -1693,7 +1701,7 @@ int main ( int argc,char **argv ) {
                 delay_ms(1000);
                 break;
             case UA_DEBUG:
-                rotate_car_slow(TURNING_DIRECTION_COUNTERCLOCKWISE);
+                rotate_car_slow(TURNING_DIRECTION_LEFT);
                 g_user_action=UA_WAITING;
                 break;
             default: //UA_PAUSE, UA_PRE_SPEED_CALIBRATE, UA_PRE_CAMERA_CALIBRATE, UA_WAITING, UA_TEST_CAMERA etc
