@@ -252,7 +252,7 @@ void load_config() {
     debug = true;
     g_user_action=UA_NAV2_RESUME;
     //default values
-    frames_per_second = 10;
+    frames_per_second = 4;
     frame_time_ms = 1000 / frames_per_second;
     
     //initialize configurations, speed_base is now zero
@@ -263,7 +263,7 @@ void load_config() {
     indoor_config.erosion_size = 3;
     indoor_config.dilation_size= 4;
     indoor_config.canny_thresh = 100;
-    indoor_config.min_area = 4;
+    indoor_config.min_area = 10;
     memcpy(&outdoor_config, &indoor_config, sizeof (RobotConfig));
     
     //parse the configuration file
@@ -1166,7 +1166,7 @@ void* sensor(void *arg) {
             if (verbose)
                 cv::imwrite("step1.jpg",mask);    
 
-            //this wil take about 72ms
+            //this will take about 72ms
             //https://docs.opencv.org/3.4.2/db/df6/tutorial_erosion_dilatation.html
             cv::erode(mask, mask, element1);  
             if (verbose)
@@ -1185,7 +1185,6 @@ void* sensor(void *arg) {
             cv::Canny(mask, canny_output, active_config->canny_thresh, active_config->canny_thresh*2, 3 ); /// Detect edges using canny
             cv::findContours(canny_output, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE, cv::Point(0, 0) );/// Find contours
 
-            /// Draw contours
             int half_width = frame.cols >> 1;
             int total = 0;
             long min_distance = 0;
