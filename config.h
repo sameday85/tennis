@@ -18,7 +18,7 @@ typedef struct _RobotConfig{
     int speed_base;//add this to the SPEED macros
 } RobotConfig;
 
-//Configuration management class
+//Indoor and outdoor configuration management
 class Config {
     public:
     Config();

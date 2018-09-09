@@ -44,7 +44,7 @@ class Picker {
     
     public:
     bool init();
-    void start();
+    void run();
     void stop();
     void de_init();
     void set_user_action(int act);

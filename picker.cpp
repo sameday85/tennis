@@ -53,7 +53,7 @@ void Picker::set_user_action(int act) {
 }
 
 //start to pick up balls
-void Picker::start() {
+void Picker::run() {
     m_vision->start();
     m_motor->start();
     m_location->start();

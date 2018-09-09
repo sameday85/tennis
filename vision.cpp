@@ -16,12 +16,10 @@
 #include <iostream>
 
 #include "opencv2/imgproc.hpp"
-#include "opencv2/imgcodecs.hpp"
 #include "opencv2/highgui.hpp"
 #include "opencv2/photo.hpp"
 
 #include <wiringPi.h>
-#include <pthread.h>
 #include <math.h>
 #include <map>
 
@@ -34,7 +32,6 @@ using namespace std;
 /*
  * Implementation of the Vision class
  */
- 
  
 //the constructor with the configuration
 Vision::Vision(Config *config) : Component(config) {
@@ -75,7 +72,10 @@ void Vision::stop() {
     Component::stop();
     if (the_thread)
         pthread_join(the_thread, NULL);
+    m_camera->release();
+    delete m_camera;
 }
+
 //waiting for a scene to be available and copy it to the input argument
 //@param output- pointer to the output secene data
 //@returns true if a scene is available and retrieved successfully
@@ -93,7 +93,7 @@ bool Vision::get_stable_scene(Scene *output) {
 
 
 //capturing frames and analyse each frame to recognize balls, find the nearest ball and get its distance and angle. other information such as
-//balls at the left of the nearest ball, balls at the right of the nearest ball are also available and saved to global variable g_scene.
+//balls at the left of the nearest ball, balls at the right of the nearest ball are also available.
 void* Vision::sensor(void *arg) {
     Vision *the_vision = (Vision*)arg;
     bool verbose = false;
@@ -102,7 +102,6 @@ void* Vision::sensor(void *arg) {
     Scene *p_scene = &the_vision->m_scene;
     RobotConfig *active_config= the_vision->get_config()->get_active_config();
     long frame_time_ms = the_vision->get_config()->get_frame_time_ms(); //convert to long
-    memset (p_scene, 0, sizeof (Scene));
     
     cv::Mat frame;
     long frame_start;
@@ -220,8 +219,6 @@ void* Vision::sensor(void *arg) {
             Utils::delay_ms(left);
     }
     
-    p_camera->release();
-
     return arg;
 }
  

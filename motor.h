@@ -88,7 +88,6 @@ class Motor : public Component {
     private:
     pthread_t the_thread;
     RobotConfig *active_config;
-    bool debug;
     
     int m_car_state, m_collector_state;
     int rotate_to_state;    

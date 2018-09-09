@@ -58,7 +58,7 @@ bool Observer::init() {
 //Observing obstacles, stop the car if needed.  
 //the interruption flag in the context will be set if an obstracle is very close.
 //this function will be running in a background thread
-//@param arg - ponter to the current class's instance
+//@param arg - pointer to the current class's instance
 void* Observer::_monitor(void *arg) {
     Observer *the_observer = (Observer*)arg;
     while (!the_observer->is_done()) {

@@ -29,8 +29,6 @@ using namespace std;
 Motor::Motor(Config *config) : Component (config) {
     //do not cache speed_base as it may be changed during running
     active_config = m_config->get_active_config();
-    debug = m_config->is_debug();
-    
     the_thread = 0;
 }
 

@@ -20,10 +20,6 @@
 
 #include "config.h"
 
-/*
- * Implementation of the Config class
- */
- 
 using namespace std; 
  
 //the constructor
