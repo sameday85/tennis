@@ -59,21 +59,14 @@ int main ( int argc,char **argv ) {
     g_config = new Config();
     g_config->load_config();
     
-    int startup_action = UA_NONE;
+    int startup_action = UA_NAV2_RESUME;
     for (int i = 1; i < argc; ++i) {
-        if (strcmp (argv[i], "-boot") == 0) {//auto start on reboot
-            //All leds on to indicate initialization
-            Led::turn_on_red_led();
-            Led::turn_on_led(PIN_LED_GREEN);
-            Led::turn_on_led(PIN_LED_BLUE);
-            Utils::delay_ms(10 * 1000); //wait for 10 seconds
+        if (strcmp (argv[i], "-boot") == 0) {
+            //auto start on reboot, pins are not initialized yet (by Observer.init)
+            Utils::delay_ms(10 * 1000); //waiting for 10 seconds for the system to boot up
             g_config->activate_outdoor_config();
             g_config->set_debug(false);
             startup_action = UA_NAV2_PAUSE;
-            //turn off these two leds but keep red led on
-            Led::turn_off_led(PIN_LED_GREEN);
-            Led::turn_off_led(PIN_LED_BLUE);
-            Led::buzzle(false);
         }
         else if (strcmp (argv[i], "-pause") == 0) {
             startup_action = UA_NAV2_PAUSE;
