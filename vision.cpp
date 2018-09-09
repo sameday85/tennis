@@ -19,13 +19,13 @@
 #include "opencv2/highgui.hpp"
 #include "opencv2/photo.hpp"
 
-#include <wiringPi.h>
 #include <math.h>
 #include <map>
 
 #include "vision.h"
 #include "utils.h"
 #include "led.h"
+#include "pins.h"
 
 using namespace std;
 

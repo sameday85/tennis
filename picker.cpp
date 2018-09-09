@@ -14,13 +14,11 @@
  * limitations under the License.
 */
 #include <iostream>
-#include <sys/time.h>
-
-#include <wiringPi.h>
 
 #include "picker.h"
 #include "utils.h"
 #include "led.h"
+#include "pins.h"
 
 using namespace std;
 //constructor with the configuration

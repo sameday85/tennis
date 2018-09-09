@@ -14,13 +14,13 @@
  * limitations under the License.
 */
 #include <iostream>
-#include <sys/time.h>
 
 #include <wiringPi.h>
 
 #include "observer.h"
 #include "led.h"
 #include "utils.h"
+#include "pins.h"
 
 using namespace std;
 

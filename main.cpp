@@ -22,6 +22,7 @@
 #include "picker.h"
 #include "led.h"
 #include "utils.h"
+#include "pins.h"
 
 using namespace std; 
 

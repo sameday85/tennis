@@ -5,7 +5,6 @@
 #include <pthread.h>
 
 #include "component.h"
-#include "pins.h"
 
 #define CAMERA_FRAME_WIDTH  (320*3)
 #define CAMERA_FRAME_HEIGHT (240*3)

@@ -20,6 +20,7 @@
 
 #include "location.h"
 #include "utils.h"
+#include "pins.h"
 
 using namespace std;
 

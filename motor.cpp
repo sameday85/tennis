@@ -21,6 +21,7 @@
 #include "motor.h"
 #include "utils.h"
 #include "led.h"
+#include "pins.h"
 
 
 using namespace std;

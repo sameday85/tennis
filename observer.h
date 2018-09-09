@@ -1,10 +1,8 @@
 #ifndef __OBSERVER_H__
 #define __OBSERVER_H__
 
-#include <raspicam/raspicam_cv.h>
 #include <pthread.h>
 
-#include "pins.h"
 #include "component.h"
 #include "motor.h"
 #include "location.h"

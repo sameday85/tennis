@@ -1,10 +1,6 @@
 #ifndef __PICKER_H__
 #define __PICKER_H__
 
-#include <raspicam/raspicam_cv.h>
-#include <pthread.h>
-
-#include "pins.h"
 #include "vision.h"
 #include "motor.h"
 #include "location.h"
