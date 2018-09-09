@@ -87,13 +87,13 @@ int main ( int argc,char **argv ) {
     g_picker->set_user_action(startup_action);
     g_picker->init();
     g_picker->run(); //run until ctl+c is received
-    Utils::delay_ms(1000);//for all background threads to be stopped
+    Utils::delay_ms(1000);//waiting for all background threads to be stopped
     g_picker->de_init();
     g_config->save_config();
 
     delete g_picker;
     delete g_config;
-    
+
     return 0;
 }
 

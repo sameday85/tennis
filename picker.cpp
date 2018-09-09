@@ -301,7 +301,7 @@ bool Picker::targeting (bool recovering) {
             if (m_user_action == UA_DONE || m_user_action == UA_PAUSE || !get_stable_scene())
                 break;
             if (m_context.scene.balls > 0) {
-                if (Utils::abs(m_context.scene.angle) <= PERFECT_ANGLE) {
+                if (abs(m_context.scene.angle) <= PERFECT_ANGLE) {
                     found = true;
                 }
                 else if ((m_context.scene.angle < 0) && (direction == TURNING_DIRECTION_LEFT))
@@ -316,7 +316,7 @@ bool Picker::targeting (bool recovering) {
         if (!found)
             return false;
     }
-    if (found && (is_ready_pickup() || Utils::abs(m_context.scene.angle) <= PERFECT_ANGLE))
+    if (found && (is_ready_pickup() || abs(m_context.scene.angle) <= PERFECT_ANGLE))
         return found;
     int last_angle = m_context.scene.angle;
     int direction = (last_angle > 0 ? TURNING_DIRECTION_RIGHT : TURNING_DIRECTION_LEFT);

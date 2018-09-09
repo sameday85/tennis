@@ -23,12 +23,6 @@
 
 using namespace std; 
 
-int Utils::abs(int value) {
-    if (value < 0)
-        value = 0 - value;
-    return value;
-}
-
 //@returns the current system time in milliseconds
 long Utils::current_time_ms() {
     struct timeval start;

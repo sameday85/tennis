@@ -1,6 +1,7 @@
 # mkdir build
 # cd build
 # cmake  -DCMAKE_BUILD_TYPE=Release ..
+# make
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
 endif()

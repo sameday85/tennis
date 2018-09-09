@@ -33,15 +33,16 @@ Config *Component::get_config() {
 bool Component::init() {
     return true;
 }
-//start the sensor
+
 void Component::start() {
     m_paused = m_done = false;
 }
-//pause the sensor
+
+//set pause status
 void Component::pause(bool b) {
     m_paused = b;
 }
-//stop the sensor
+//The app is exiting.
 void Component::stop() {
     m_paused = m_done = true;
 }
