@@ -195,7 +195,7 @@ void* Vision::sensor(void *arg) {
                         nearest_ball_at_left = pt.y;
                 }
             }
-            if (the_vision->debug) {
+            if (the_vision->debug && (total > 0)) {
                 cout << "#" << (p_scene->seq+1) << ": " << total << ",target ball angle " << ball_angle << ",dist " << ball_distance_y  << ",balls(L/R) " <<  balls_at_left << "/" << balls_at_right << ",time=" << (Utils::current_time_ms() - frame_start) << endl;
             }
             p_scene->balls = total;

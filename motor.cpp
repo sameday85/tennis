@@ -221,7 +221,7 @@ void Motor::stop_car() {
     if (m_car_state==CAR_STATE_STOPPED)
         return;
     if (debug)
-        cout << "%%%%%Stopped" << endl;
+        cout << "%%%%%Car Stopped" << endl;
     stop_motor(MOTORS_LEFT);
     stop_motor(MOTORS_RIGHT);
     m_car_state=CAR_STATE_STOPPED;
@@ -242,28 +242,20 @@ void* Motor::_rotate_car_bg(void *arg) {
     int duration_ms= fast ? 1000 : 2000;
     int step = 100;
 
-    int dir = 0; bool off = false;
+    int dir = DIR_FORWARD; bool off = false;
+    int left_speed = 0, right_speed = 0;
     while (!the_motor->is_paused() && !off) {
-        if (dir == 0) {//move forward
-            if (clockwise) {
-                the_motor->set_speed_left_right(speed , idle_speed);
-            }
-            else {
-                the_motor->set_speed_left_right(idle_speed, speed);
-            }
-            the_motor->start_motor(MOTORS_LEFT, DIR_FORWARD);
-            the_motor->start_motor(MOTORS_RIGHT, DIR_FORWARD);
+        if ((dir == DIR_FORWARD && clockwise) || (dir == DIR_BACKWARD && !clockwise)) {
+            left_speed = speed;
+            right_speed= idle_speed;
         }
-        else {//move backward
-            if (clockwise) {
-                the_motor->set_speed_left_right(idle_speed, speed);
-            }
-            else {
-                the_motor->set_speed_left_right(speed, idle_speed);
-            }
-            the_motor->start_motor(MOTORS_LEFT, DIR_BACKWARD);
-            the_motor->start_motor(MOTORS_RIGHT, DIR_BACKWARD);
+        else {
+            left_speed = idle_speed;
+            right_speed= speed;
         }
+        the_motor->set_speed_left_right(left_speed, right_speed);
+        the_motor->start_motor(MOTORS_LEFT,  dir);
+        the_motor->start_motor(MOTORS_RIGHT, dir);
         for (int i = 0; i < (duration_ms / step); ++i) {
             if (the_motor->m_car_state != state) {
                 off = true;
