@@ -42,6 +42,7 @@ Observer::~Observer() {
 bool Observer::init() {
     Component::init();
     
+    //led, button and buzzer GPIOs
     pinMode(PIN_BTN1,  INPUT);
     pinMode(PIN_BTN2,  INPUT);
     pinMode(PIN_LED_RED,    OUTPUT);
@@ -49,21 +50,21 @@ bool Observer::init() {
     pinMode(PIN_LED_BLUE,   OUTPUT);
     pinMode(PIN_BUZZER, OUTPUT);
     digitalWrite(PIN_BUZZER, LOW);
-    
-    Led::turn_off_all_leds();
-    
+
+    Led::set_led_state(0);
+
     return true;
 }
 
 //Observing obstacles, stop the car if needed.  
-//the interruption flag in the context will be set if an obstracle is very close.
+//the interruption flag in the context will be set if an obstacle is very close.
 //this function will be running in a background thread
 //@param arg - pointer to the current class's instance
 void* Observer::_monitor(void *arg) {
     Observer *the_observer = (Observer*)arg;
     while (!the_observer->is_done()) {
         int car_state = the_observer->m_motor->get_car_state();
-        if ((car_state & 1) == 1) {
+        if ((car_state & 1) == 1) {//the is moving forward
             long front_obstacle = the_observer->m_location->measure_front_distance();
             if (front_obstacle <= FRONT_DISTANCE_DANGEROUS) {
                 if (the_observer->debug)
@@ -81,6 +82,7 @@ void* Observer::_monitor(void *arg) {
                 *the_observer->p_interruption = INT_REAR_OBSTACLE;
             }
         }
+        //Check if any button is pressed        
         if (digitalRead (PIN_BTN1) == HIGH) {
             Utils::delay_ms(100);
             if (digitalRead (PIN_BTN1) == HIGH) {
@@ -97,8 +99,10 @@ void* Observer::_monitor(void *arg) {
     }
     return arg;//suppress the unused param warning
 }
+
 //Start a backgrund thread to monitor obstacle distances and button status
 void Observer::start() {
+    Component::start();
     pthread_create(&the_thread, NULL, _monitor, this);
 }
 
@@ -106,7 +110,7 @@ void Observer::stop() {
     Component::stop();
     if (the_thread)
         pthread_join(the_thread, NULL);
-    Led::turn_off_all_leds();
+    Led::set_led_state(0);
 }
 
 //Process button events
@@ -121,27 +125,19 @@ void* Observer::btn_event_handle(int event) {
         switch (*p_user_action) {
             case UA_NONE:
                 *p_user_action = UA_NAV2_PAUSE;
-                Led::turn_on_red_led();
-                Led::turn_off_led(PIN_LED_GREEN);
-                Led::turn_off_led(PIN_LED_BLUE);
+                Led::set_led_state(LED_STATE_RED_ON);
                 break;
             case UA_PAUSE:
                 *p_user_action = UA_NAV2_RESUME;
-                Led::turn_off_red_led();
-                Led::turn_off_led(PIN_LED_GREEN);
-                Led::turn_off_led(PIN_LED_BLUE);
+                Led::set_led_state(0);
                 break;
             case UA_PRE_CAMERA_CALIBRATION:
                 *p_user_action=UA_CAMERA_CALIBRATION;
-                Led::turn_on_red_led();
-                Led::turn_on_led(PIN_LED_GREEN);
-                Led::turn_off_led(PIN_LED_BLUE);
+                Led::set_led_state(LED_STATE_RED_ON|LED_STATE_GREEN_ON);
                 break;
             case UA_PRE_MOTOR_CALIBRATION:
                 *p_user_action=UA_MOTOR_CALIBRATION;
-                Led::turn_on_red_led();
-                Led::turn_off_led(PIN_LED_GREEN);
-                Led::turn_on_led(PIN_LED_BLUE);
+                Led::set_led_state(LED_STATE_RED_ON|LED_STATE_BLUE_ON);
                 break;
         }
     }
@@ -149,21 +145,15 @@ void* Observer::btn_event_handle(int event) {
         switch (*p_user_action) {
             case UA_PAUSE:
                 *p_user_action = UA_PRE_CAMERA_CALIBRATION;
-                Led::turn_off_red_led();
-                Led::turn_on_led(PIN_LED_GREEN);
-                Led::turn_off_led(PIN_LED_BLUE);
+                Led::set_led_state(LED_STATE_GREEN_ON);
                 break;
             case UA_PRE_CAMERA_CALIBRATION:
                 *p_user_action = UA_PRE_MOTOR_CALIBRATION;
-                Led::turn_off_red_led();
-                Led::turn_off_led(PIN_LED_GREEN);
-                Led::turn_on_led(PIN_LED_BLUE);
+                Led::set_led_state(LED_STATE_BLUE_ON);
                 break;
             case UA_PRE_MOTOR_CALIBRATION:
                 *p_user_action=UA_PAUSE;
-                Led::turn_on_red_led();
-                Led::turn_off_led(PIN_LED_GREEN);
-                Led::turn_off_led(PIN_LED_BLUE);
+                Led::set_led_state(LED_STATE_RED_ON);
                 break;
         }
     }

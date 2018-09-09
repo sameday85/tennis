@@ -42,10 +42,19 @@ void Led::turn_off_red_led() {
     g_red_led_on=false;
 }
 
-void Led::turn_off_all_leds() {
-    turn_off_led(PIN_LED_RED);
-    turn_off_led(PIN_LED_GREEN);
-    turn_off_led(PIN_LED_BLUE);    
+void Led::set_led_state(int state) {
+    if (state & LED_STATE_RED_ON)
+        turn_on_red_led();
+    else
+        turn_off_red_led();
+    if (state & LED_STATE_GREEN_ON)
+        turn_on_led(PIN_LED_GREEN);
+    else
+        turn_off_led(PIN_LED_GREEN);
+    if (state & LED_STATE_BLUE_ON)
+        turn_on_led(PIN_LED_BLUE);
+    else
+        turn_off_led(PIN_LED_BLUE);
 }
 
 //make a long or shot buzzle

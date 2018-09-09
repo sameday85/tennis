@@ -226,7 +226,7 @@ void* Vision::sensor(void *arg) {
 //recognize one ball and get its hsv color range. the idea is to take a background picture first(the led is stead on, frame 1), 
 //then put one ball in the background (the led is flashing) and get another picture(after the led stop flashing, frame 2). 
 //substract frame1 from frame 2 to get the ball picture only with all other areas as black. pixels will then be retrieved
-//from the ball picture(a cycle) and min/max hsv values will be calculated and saved to the configuration file.
+//from the ball picture(a circle) and min/max hsv values will be calculated and saved to the configuration file.
 bool Vision::calibrate() {
     Led::turn_on_red_led(); //as we are going back to pause state
         
