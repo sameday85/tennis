@@ -45,7 +45,7 @@ bool Picker::init() {
     return succeed;
 }
 
-//se start up user action, may pause the program at start up
+//set start up user action, may pause the program at start up
 void Picker::set_user_action(int act) {
     m_user_action = act;
 }
@@ -81,14 +81,14 @@ void Picker::run() {
             case UA_NAV2_PAUSE:
                 m_motor->stop_car();
                 m_motor->stop_collector();
-                Led::turn_on_red_led();
                 m_vision->pause(true);
+                Led::turn_on_red_led();
                 m_user_action=UA_PAUSE;
                 break;
             case UA_NAV2_RESUME:
                 m_motor->start_collector();
-                Led::turn_off_red_led();
                 m_vision->pause(false);
+                Led::turn_off_red_led();
                 //the observer should still be running (not paused)
                 m_user_action = UA_NONE;
                 break;
@@ -109,19 +109,20 @@ void Picker::run() {
                 }
                 break;
             case UA_DEBUG:
+                cout << "Front distance " << m_location->measure_front_distance() << endl;
                 m_motor->rotate_car_slow(TURNING_DIRECTION_LEFT);
-                m_user_action=UA_WAITING;
+                Utils::delay_ms(200);
                 break;
-            default: //UA_PAUSE, UA_PRE_SPEED_CALIBRATE, UA_PRE_CAMERA_CALIBRATE, UA_WAITING etc
+            default: //UA_PAUSE, UA_PRE_MOTOR_CALIBRATION, UA_PRE_CAMERA_CALIBRATION, UA_WAITING etc
                 Utils::delay_ms(1000);
                 break;
         }//switch
     } //while
     
+    m_observer->stop();
     m_vision->stop();
     m_motor->stop();
     m_location->stop();
-    m_observer->stop();
 }
 
 //stop the picker, cannot be resumed
@@ -212,7 +213,6 @@ void Picker::workaround_obstacle() {
         //car already stopped, do nothing here
     }
 }
-
 
 //get one scene
 //@returns true if one updated scene is available and retrieved, otherwise false.

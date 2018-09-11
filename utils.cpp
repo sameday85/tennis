@@ -13,9 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
 */
-#include <stdio.h>
-#include <stdlib.h>
-#include <pthread.h>
 #include <unistd.h>
 #include <sys/time.h>
 
@@ -31,7 +28,7 @@ long Utils::current_time_ms() {
     return (long)(start.tv_usec / 1000 + start.tv_sec * 1000);
 }
 
-
+//suspend execution for millisecond intervals
 void Utils::delay_ms(int x) {
     usleep(x * 1000);
 }

@@ -324,19 +324,19 @@ int Motor::get_car_state() {
 int Motor::measure_speed(Location *p_location) {
     int duration_s = 4;
 
-    long distance1 = p_location->measure_front_distance_ex();
+    long distance1 = p_location->measure_front_distance();
     move_car_forward();
     Utils::delay_ms(duration_s * 1000);
     stop_car();
     Utils::delay_ms(500); //wait for 1/2 second, then move back
-    long distance2 = p_location->measure_front_distance_ex();
+    long distance2 = p_location->measure_front_distance();
         
-    long distance3 = p_location->measure_front_distance_ex();
+    long distance3 = p_location->measure_front_distance();
     move_car_backward();
     Utils::delay_ms(duration_s * 1000);
     stop_car();
     Utils::delay_ms(500); //wait for 1/2 second
-    long distance4 = p_location->measure_front_distance_ex();
+    long distance4 = p_location->measure_front_distance();
 
     long speed1 = (distance1 - distance2) / duration_s;
     long speed2 = (distance4 - distance3) / duration_s;

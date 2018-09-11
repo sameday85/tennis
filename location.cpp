@@ -26,23 +26,21 @@ using namespace std;
 
 //the constructor with configuration
 Location::Location(Config *config) : Component(config) {
+    front_idx = rear_idx = 0;
 }
 
 Location::~Location() {
 }
 
-//sometimes the front ultra sound sensor reports false distance.
-//this function tries to filter out these false results.
-long Location::measure_front_distance_ex(void) {
-    long distance = measure_front_distance();
-    long timestamp = Utils::current_time_ms() + 2000;//try at most two seconds
-    while (distance > 1000) {//a false measurement
-        Utils::delay_ms(200);
-        distance = measure_front_distance();
-        if (Utils::current_time_ms() >= timestamp)
-            break;
+void Location::start() {
+    Component::start();
+    //as the front sensor sometimes report a false distance, we will measure the distance for several times, 
+    //then calculate the average after removing the biggest and shortest distances.
+    for (int i = 0; i < SAMPLE_SIZE; ++i) {
+        front[i]=measure_distance(PIN_TRIG_FRONT, PIN_ECHO_FRONT);
+        rear[i] =measure_distance(PIN_TRIG_REAR, PIN_ECHO_REAR);
     }
-    return distance;
+    front_idx = rear_idx = SAMPLE_SIZE - 1;
 }
 
 //measure the front or rear obstacle distance in cm
@@ -69,24 +67,44 @@ long Location::measure_distance(int pin_trig, int pin_echo) {
     return (long)((float)(stop - start) / 1000000 * 34000 / 2);
 }
 
+//calculate the average distance after removing the nearest and farest distances
+long Location::calculate_average(long *distances) {
+    long smallest = distances[0], biggest = distances[0];
+    for (int i = 1; i < SAMPLE_SIZE; ++i) {
+        if (distances[i] < smallest)
+            smallest = distances[i];
+        else if (distances[i] > biggest) {
+            biggest = distances[i];
+        }
+    }
+    long sum = 0; int count = 0;
+    for (int i = 0; i < SAMPLE_SIZE; ++i) {
+        if (distances[i] == smallest) {
+            smallest = -1;//remove only one "smallest"
+        }
+        else if (distances[i] == biggest) {
+            biggest = -1; //remove only one "biggest"
+        }
+        else {
+            ++count;
+            sum += distances[i];
+        }
+    }
+    return sum / count;
+}
+
 //front obstracle distance in cm
 long Location::measure_front_distance(void) {
-    //This sensor sometimes reports a wrong distance as 4cm
-    static long last_distance = 65535; //always ignore the first measurement
-    long distance = measure_distance(PIN_TRIG_FRONT, PIN_ECHO_FRONT);
-    long movement = abs(distance - last_distance);
-    last_distance = distance;
-    if ((movement > 40) && (distance <= 10 || last_distance <= 10)) {//take it as an invalid measurement
-        if (debug)
-            cout << "False distance " << distance << endl;
-        distance = 65535;
-    }
-    return distance;
+    front_idx = (front_idx + 1) % SAMPLE_SIZE;
+    front[front_idx]=measure_distance(PIN_TRIG_FRONT, PIN_ECHO_FRONT);
+    return calculate_average(front);
 }
 
 //rear obstacle distance in cm
 long Location::measure_rear_distance(void) {
-    return measure_distance(PIN_TRIG_REAR, PIN_ECHO_REAR);
+    rear_idx = (rear_idx + 1) % SAMPLE_SIZE;
+    rear[rear_idx]=measure_distance(PIN_TRIG_REAR, PIN_ECHO_REAR);
+    return calculate_average(rear);
 }
 
 //override, initialize the pins
