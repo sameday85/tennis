@@ -62,6 +62,8 @@ void Motor::stop() {
     Component::stop();
     stop_car();
     stop_collector();
+    softPwmStop(PIN_PWM_LEFT);
+    softPwmStop(PIN_PWM_RIGHT);
 }
 
 //start the given motor. The motor may be one of the robot car motors or the collector (which is a heavy duty motor).

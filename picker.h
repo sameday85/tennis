@@ -48,8 +48,6 @@ class Picker {
     private:
     int choose_turning_driection(bool recovering);
     void workaround_obstacle();
-    bool speed_calibrate();
-    bool camera_calibrate();
     bool get_stable_scene();
     bool is_covered_raw(int angle, int distance, bool strict);
     bool is_covered(bool strict);
