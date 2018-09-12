@@ -29,7 +29,6 @@ typedef struct _RobotCtx {
     
     Scene last_scene_w_balls;
     int balls_collected;
-    int consecutive_collected;
     int last_turn_direction;
 } RobotCtx;
 
@@ -46,13 +45,12 @@ class Picker {
     void set_user_action(int act);
 
     private:
-    int choose_turning_driection(bool recovering);
+    bool should_continue();
+    int choose_turning_driection();
     void workaround_obstacle();
     bool get_stable_scene();
-    bool is_covered_raw(int angle, int distance, bool strict);
     bool is_covered(bool strict);
     bool is_ready_pickup();
-    bool targeting (bool recovering);
     bool tracking();
     bool searching();
     void picking_up();

@@ -50,6 +50,13 @@ void Picker::set_user_action(int act) {
     m_user_action = act;
 }
 
+//@returns true if no interruption and not paused.
+bool Picker::should_continue() {
+    if ((m_user_action == UA_DONE) || (m_user_action == UA_PAUSE))
+        return false;
+    return (m_interruption == INT_NONE);
+}
+
 //start to pick up balls
 void Picker::run() {
     m_vision->start();
@@ -139,60 +146,50 @@ void Picker::de_init() {
 
 
 //determine what direction we should turn the car
-//@param recovering - true if we just lost tracking a ball and wanted to get it back
-int Picker::choose_turning_driection(bool recovering) {
+int Picker::choose_turning_driection() {
     int direction = TURNING_DIRECTION_LEFT;
-    if (recovering) {
-        //we lost the ball, try to get it back
-        if (m_context.last_scene_w_balls.angle <= 0) {
-            if (debug)
-                cout << "Decision 1" << endl;
-        }
-        else {
-            if (debug)
-                cout << "Decision 2" << endl;
-            direction = TURNING_DIRECTION_RIGHT;
-        }
+    
+    if (m_context.scene.balls > 0) {
+        direction = (m_context.scene.angle > 0 ? TURNING_DIRECTION_RIGHT : TURNING_DIRECTION_LEFT);
     }
-    else {
-        //after we picked up one ball
-        if (m_context.last_scene_w_balls.balls_at_left > 0 &&  m_context.last_scene_w_balls.balls_at_right > 0) {
-            if (m_context.last_scene_w_balls.nearest_ball_at_left < m_context.last_scene_w_balls.nearest_ball_at_right) {
-                if (debug)
-                    cout << "Decision 3" << endl;
-                direction = TURNING_DIRECTION_RIGHT;
-            }
-            else if (m_context.last_scene_w_balls.nearest_ball_at_left > m_context.last_scene_w_balls.nearest_ball_at_right) {
-                if (debug)
-                    cout << "Decision 4" << endl;
-            }
-            else {
-                if (debug)
-                    cout << "Decision 5" << endl;
-                direction=m_context.last_turn_direction;
-            }
-        }
-        else if (m_context.last_scene_w_balls.balls_at_left > 0) {
+    else if (m_context.last_scene_w_balls.balls_at_left > 0 &&  m_context.last_scene_w_balls.balls_at_right > 0) {
+        if (m_context.last_scene_w_balls.nearest_ball_at_left < m_context.last_scene_w_balls.nearest_ball_at_right) {
             if (debug)
-                cout << "Decision 6" << endl;
-        }
-        else if (m_context.last_scene_w_balls.balls_at_right > 0) {
-            if (debug)
-                cout << "Decision 7" << endl;
+                cout << "Decision 3" << endl;
             direction = TURNING_DIRECTION_RIGHT;
         }
-        else if (m_context.last_scene_w_balls.angle <= 0) {
+        else if (m_context.last_scene_w_balls.nearest_ball_at_left > m_context.last_scene_w_balls.nearest_ball_at_right) {
             if (debug)
-                cout << "Decision 8, no known balls left" << endl;
+                cout << "Decision 4" << endl;
         }
         else {
             if (debug)
-                cout << "Decision 9, no known balls left" << endl;
+                cout << "Decision 5" << endl;
             direction=m_context.last_turn_direction;
         }
     }
+    else if (m_context.last_scene_w_balls.balls_at_left > 0) {
+        if (debug)
+            cout << "Decision 6" << endl;
+    }
+    else if (m_context.last_scene_w_balls.balls_at_right > 0) {
+        if (debug)
+            cout << "Decision 7" << endl;
+        direction = TURNING_DIRECTION_RIGHT;
+    }
+    else if (m_context.last_scene_w_balls.angle <= 0) {
+        if (debug)
+            cout << "Decision 8, no known balls left" << endl;
+    }
+    else {
+        if (debug)
+            cout << "Decision 9, no known balls left" << endl;
+        direction=m_context.last_turn_direction;
+    }
+    
     if (direction == TURNING_DIRECTION_UNKNOWN)
         direction = TURNING_DIRECTION_RIGHT;
+
     return direction;
 }
 //workaround the front or rear obstacle. do nothing for rear obstacle as the car already stopped.
@@ -204,7 +201,7 @@ void Picker::workaround_obstacle() {
         Utils::delay_ms(2000);
         if (m_user_action == UA_DONE)
             return;
-        int direction = choose_turning_driection(false);
+        int direction = choose_turning_driection();
         m_context.last_turn_direction = direction;
         m_motor->rotate_car_fast(direction);
         Utils::delay_ms(1000);
@@ -224,11 +221,13 @@ bool Picker::get_stable_scene() {
 }
 
 //check if the target ball is still in the right position
-//@param angle - the ball angle
-//@pram distance - the ball distance in pixels
-//@param strict - true if the ball should be very close to the center so that it can be picked up.
-bool Picker::is_covered_raw(int angle, int distance, bool strict) {
-    int abs_angle = abs(angle);
+//@param strict - true if the ball needs to be at a small angle
+bool Picker::is_covered(bool strict) {
+    if (m_context.scene.balls <= 0)
+        return false;
+    
+    int abs_angle = abs(m_context.scene.angle);
+    int distance  = m_context.scene.distance;
     int target_angle = 0;
     if (distance <= PIXEL_DISTANCE_PICK_FAR) {
         target_angle = PICKUP_ANGLE_FAR + (PICKUP_ANGLE_NEAR - PICKUP_ANGLE_FAR) * (PIXEL_DISTANCE_PICK_FAR - distance) / (PIXEL_DISTANCE_PICK_FAR - PIXEL_DISTANCE_PICK_NEAR);
@@ -240,13 +239,6 @@ bool Picker::is_covered_raw(int angle, int distance, bool strict) {
     return abs_angle <= target_angle;
 }
 
-//check if the target ball is still in the right position
-bool Picker::is_covered(bool strict) {
-    if (m_context.scene.balls <= 0)
-        return false; //something wrong
-    return is_covered_raw(m_context.scene.angle, m_context.scene.distance, strict);
-}
-
 //@return true if the ball is close enough and in allowed angle
 bool Picker::is_ready_pickup() {
     if (m_context.scene.balls <= 0)
@@ -256,97 +248,68 @@ bool Picker::is_ready_pickup() {
 
 //find one ball (turn the car around if needed) and adjust the car direction to make sure the ball is at 
 //good positition so that it can be picked up later.
-//@param recovering - true if we just lost the "nearest" ball and want to find it again.
-//@returns true if at least one ball is found
-bool Picker::targeting (bool recovering) {
+//@returns true if one ball is found
+bool Picker::searching () {
     if (debug)
-        cout << "@@@Targeting, recovering?" << recovering << endl;
+        cout << "@@@Searching" << endl;
+    
+    //done or paused?
+    if (!get_stable_scene ())
+        return false;
+    
+    //there is one ball which is ready for picking up
+    if (is_covered(true))
+        return true;
+    
+    //step 1, rotate the car until we see a ball
     bool found = false;
-    if ((m_context.scene.balls <= 0) || abs(m_context.scene.angle) > GOOD_ANGLE) {
-        //step 1, rotate the car until we see a ball
-        int direction = TURNING_DIRECTION_UNKNOWN;
-        if (m_context.scene.balls > 0) {
-            direction = m_context.scene.angle > 0 ? TURNING_DIRECTION_RIGHT : TURNING_DIRECTION_LEFT;
+    if (m_context.scene.balls <= 0) {
+        int direction = choose_turning_driection();
+        m_context.last_turn_direction = direction; //try to rotate the car in the same direction if no more balls found after one ball was picked up
+        long till_ms = Utils::current_time_ms() + MAX_TURNING_360_MS;//for 360 degree
+        m_motor->rotate_car_fast(direction);
+        while (!found && (Utils::current_time_ms() < till_ms)) {
+            Utils::delay_ms(m_config->get_frame_time_ms()>>1);
+            if (!should_continue() || !get_stable_scene()) {
+                break;
+            }
+            //slow down once we see a ball
+            if (m_context.scene.balls > 0) {
+                found = true;
+            }
         }
-        else {
-            direction = choose_turning_driection(recovering);
-        }
-        if ((m_context.scene.balls <= 0) && m_context.consecutive_collected > 0) {
+        //The car already turned one round, no ball found
+        if (!found)
+            return false;
+
+        if (is_covered(true))
+            return true;
+    }
+
+    //step 2, rotating the car slowly to target the ball
+    found = false;
+    {
+        int direction = choose_turning_driection();
+        //off track too much, move the car back first
+        if (!is_covered(false)) {
             if (direction == TURNING_DIRECTION_RIGHT) {
                 m_motor->turn_car_right_backward();
             }
-            else {
+            else if (direction == TURNING_DIRECTION_LEFT) {
                 m_motor->turn_car_left_backward();
             }
-            Utils::delay_ms(BACK_AFTER_PICKUP_MS);
-        }
-        long till_ms = Utils::current_time_ms() + MAX_TURNING_360_MS;//for 360 degree
-        if (!recovering) {
-            m_motor->rotate_car_fast(direction);
-            found = false;
-            while (!found && (m_interruption == INT_NONE) && (Utils::current_time_ms() < till_ms)) {
-                Utils::delay_ms(m_config->get_frame_time_ms()>>1);
-                if ((m_user_action == UA_DONE) || (m_user_action == UA_PAUSE) || !get_stable_scene()) {
-                    break;
-                }
-                if (m_context.scene.balls > 0) {
-                    found = true;
-                }
-            }
-            //The car already turned one round, no ball found
-            if (!found)
-                return false;
+            Utils::delay_ms(1000);
         }
         m_motor->rotate_car_slow(direction);
-        found = false;
-        while (!found && (m_interruption == INT_NONE) && (Utils::current_time_ms() < till_ms)) {
-            Utils::delay_ms(m_config->get_frame_time_ms()>>1);
-            if ((m_user_action == UA_DONE) || (m_user_action == UA_PAUSE) || !get_stable_scene())
-                break;
-            if (m_context.scene.balls > 0) {
-                if (abs(m_context.scene.angle) <= PERFECT_ANGLE) {
-                    found = true;
-                }
-                else if ((m_context.scene.angle < 0) && (direction == TURNING_DIRECTION_LEFT))
-                    continue;
-                else if ((m_context.scene.angle > 0) && (direction == TURNING_DIRECTION_RIGHT))
-                    continue;
-                else {
-                    found = true;
-                }
-            }
-        }
-        if (!found)
-            return false;
-    }
-    if (found && (is_ready_pickup() || abs(m_context.scene.angle) <= PERFECT_ANGLE))
-        return found;
-    int last_angle = m_context.scene.angle;
-    int direction = (last_angle > 0 ? TURNING_DIRECTION_RIGHT : TURNING_DIRECTION_LEFT);
-    //If the car is too close to the ball, move back a little bit
-    if (!is_covered(false)) {
-        if (direction == TURNING_DIRECTION_RIGHT) {
-            m_motor->turn_car_right_backward();
-        }
-        else if (direction == TURNING_DIRECTION_LEFT) {
-            m_motor->turn_car_left_backward();
-        }
-        Utils::delay_ms(1000);
-    }
-    //step 2, rotating the car to target the ball
-    m_motor->rotate_car_slow(direction);
-    { 
-        //reset again
-        found = false;
         long till_ms = Utils::current_time_ms() + MAX_TURNING_360_MS;
-        int this_angle = last_angle;
-        while (!found && (m_interruption == INT_NONE) && (Utils::current_time_ms() < till_ms)) {
+        int last_angle = m_context.scene.angle, this_angle = 0;
+        while (!found && (Utils::current_time_ms() < till_ms)) {
             Utils::delay_ms(m_config->get_frame_time_ms()>>1);
-            if (m_user_action == UA_DONE || m_user_action == UA_PAUSE || !get_stable_scene())
+            if (!should_continue() || !get_stable_scene())
                 break;
             if (m_context.scene.balls > 0) {
                 this_angle = m_context.scene.angle;
-                if (is_ready_pickup() || abs(m_context.scene.angle) <= PERFECT_ANGLE || (this_angle * last_angle < 0)) {//direction reversed
+                if (is_covered(true) || (this_angle * last_angle < 0)) {//ball moved from one side to another side
                     found = true;
                 }
                 last_angle = this_angle;
@@ -366,7 +329,7 @@ bool Picker::tracking() {
     int counter_left = 0, counter_right = 0;//how many times we saw the ball at left or right
     bool ready_to_pickup = false;
     //tracking the ball
-    while (m_interruption == INT_NONE && m_user_action == UA_NONE && get_stable_scene()) {
+    while (should_continue() && get_stable_scene()) {
         if (m_context.scene.balls > 0) {
             if (is_ready_pickup()) {
                 ready_to_pickup = true;
@@ -400,40 +363,17 @@ bool Picker::tracking() {
                     total_counter = counter_left = counter_right = 0;
                 }
             }
-            else if (targeting(true)) {//the ball is out of path
-                m_motor->move_car_forward();
+            else {//the ball is off track too much, need fast rotation to target it
+                break;
             }
         }
         else {
             //the car may move so quick
-            ready_to_pickup = true;
+            ready_to_pickup = true; //just a guess
             break;
         }
     }
     return ready_to_pickup;
-}
-
-//search and find one ball then move the car forward to try to pick up the ball
-//@returns true if one ball is found and can be picked up later
-bool Picker::searching() {
-    if (debug)
-        cout << "@@@Searching" << endl;
-    
-    if (!get_stable_scene ())
-        return false;
-
-    bool found = false;
-    if ((m_context.scene.balls > 0) && is_covered(true))
-        found = true;
-    else {
-        //turn around to find if there are more balls
-        found = targeting(false);
-        if ((m_interruption == INT_NONE) && m_context.scene.balls <= 0)
-            m_interruption = INT_NO_MORE_BALLS;
-    }
-    if (found)
-        m_motor->move_car_forward();
-    return found;
 }
 
 //search to find one ball and pick it up
@@ -441,41 +381,46 @@ void Picker::picking_up() {
     if (debug)
         cout << "@@@Picking up" << endl;
     bool picked_one = false;
-    if (m_user_action == UA_NONE) {
-        if (searching()) {
+    if (searching()) {
+        if (debug)
+            cout << "**Found the ball to be picked up, angle " << m_context.scene.angle << endl;
+        m_motor->move_car_forward();
+        if (tracking()) {
             if (debug)
-                cout << "**Found the ball to be picked up, angle " << m_context.scene.angle << endl;
+                cout << "==============================>Ready to pickup" << endl;
+            //wait for the ball to be out of scene while the car is moving forward
             m_motor->move_car_forward();
-            if (tracking()) {
+            int last_distance = m_context.scene.distance;
+            long wait_until = Utils::current_time_ms() + 3000; //set a time limitation
+            get_stable_scene();
+            while (m_context.scene.balls > 0 && m_context.scene.distance <= last_distance) {//distance is decreasing
+                if (Utils::current_time_ms() > wait_until)
+                    break;
+                last_distance = m_context.scene.distance;
+                Utils::delay_ms(m_config->get_frame_time_ms());
+                if (!get_stable_scene())
+                    break;
+            }
+            if (should_continue()) {//the car is still moving
                 if (debug)
-                    cout << "==============================>Ready to pickup" << endl;
-                //wait for the ball to be out of scene while the car is moving forward
-                m_motor->move_car_forward();
-                int last_distance = m_context.scene.distance;
-                long wait_until = Utils::current_time_ms() + 3000; //set a time limitation
-                get_stable_scene();
-                while (m_context.scene.balls > 0 && m_context.scene.distance <= last_distance) {
-                    if (Utils::current_time_ms() > wait_until)
-                        break;
-                    last_distance = m_context.scene.distance;
-                    Utils::delay_ms(m_config->get_frame_time_ms());
-                    get_stable_scene();
-                }
-                if (m_user_action == UA_NONE && m_interruption == INT_NONE) {//we are still moving
-                    Led::turn_on_led(PIN_LED_GREEN);//green led on
-                    Utils::delay_ms(WAIT_BALL_OUT_OF_SCENE_MS);
-                    m_motor->stop_car();
-                    Utils::delay_ms(WAIT_BALL_PICKUP_MS);
-                    Led::turn_off_led(PIN_LED_GREEN);//green led off
-                    ++m_context.balls_collected;
-                    picked_one = true;
-                }
+                    cout << "==============================>picking up" << endl;
+                Led::turn_on_led(PIN_LED_GREEN);//green led on
+                Utils::delay_ms(WAIT_BALL_OUT_OF_SCENE_MS);
+                m_motor->stop_car();
+                Utils::delay_ms(WAIT_BALL_PICKUP_MS);
+                Led::turn_off_led(PIN_LED_GREEN);//green led off
+                ++m_context.balls_collected;
+                picked_one = true;
             }
         }
     }
-    if (picked_one)
-        ++m_context.consecutive_collected;
-    else
-        m_context.consecutive_collected = 0;
+
+    if (picked_one) {
+        //If no more balls in the scene, move back a little bit
+        if (get_stable_scene () && (m_context.scene.balls <= 0)) {
+            m_motor->move_car_backward();
+            Utils::delay_ms(BACK_AFTER_PICKUP_MS);
+        }
+    }
 }
 

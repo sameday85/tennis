@@ -22,7 +22,7 @@
 #define TURNING_SPEED_MIN   10
 #define TURNING_SPEED_MAX   30
 #define ROTATING_SPEED_FAST 58 //rotate the car fast, once find a ball slow down
-#define ROTATING_SPEED_SLOW 30 //
+#define ROTATING_SPEED_SLOW 34 //
 
 //time limitation for turning 360 degree in fast speed
 #define MAX_TURNING_360_MS       20000
