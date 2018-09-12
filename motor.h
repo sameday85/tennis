@@ -24,8 +24,8 @@
 #define ROTATING_SPEED_FAST 58 //rotate the car fast, once find a ball slow down
 #define ROTATING_SPEED_SLOW 30 //
 
-//time limitation for turning 90 degree in fast speed
-#define MAX_TURNING_90_MS       6000
+//time limitation for turning 360 degree in fast speed
+#define MAX_TURNING_360_MS       20000
 
 //car movement states
 #define CAR_STATE_STOPPED                   0

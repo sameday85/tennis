@@ -111,7 +111,6 @@ void Motor::stop_motor(int motor) {
             pin1 = PIN_RMOTORS_1;
             pin2 = PIN_RMOTORS_2;
             break;
-            break;
         case MOTOR_COLLECTOR:
             pin1 = PIN_COLLECTOR_1;
             pin2 = PIN_COLLECTOR_2;

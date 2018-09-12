@@ -280,13 +280,13 @@ bool Picker::targeting (bool recovering) {
             }
             Utils::delay_ms(BACK_AFTER_PICKUP_MS);
         }
-        long till_ms = Utils::current_time_ms() + MAX_TURNING_90_MS * 4;//for 360 degree
+        long till_ms = Utils::current_time_ms() + MAX_TURNING_360_MS;//for 360 degree
         if (!recovering) {
             m_motor->rotate_car_fast(direction);
             found = false;
             while (!found && (m_interruption == INT_NONE) && (Utils::current_time_ms() < till_ms)) {
                 Utils::delay_ms(m_config->get_frame_time_ms()>>1);
-                if (m_user_action == UA_DONE || m_user_action == UA_PAUSE || !get_stable_scene()) {
+                if ((m_user_action == UA_DONE) || (m_user_action == UA_PAUSE) || !get_stable_scene()) {
                     break;
                 }
                 if (m_context.scene.balls > 0) {
@@ -301,7 +301,7 @@ bool Picker::targeting (bool recovering) {
         found = false;
         while (!found && (m_interruption == INT_NONE) && (Utils::current_time_ms() < till_ms)) {
             Utils::delay_ms(m_config->get_frame_time_ms()>>1);
-            if (m_user_action == UA_DONE || m_user_action == UA_PAUSE || !get_stable_scene())
+            if ((m_user_action == UA_DONE) || (m_user_action == UA_PAUSE) || !get_stable_scene())
                 break;
             if (m_context.scene.balls > 0) {
                 if (abs(m_context.scene.angle) <= PERFECT_ANGLE) {
@@ -338,7 +338,7 @@ bool Picker::targeting (bool recovering) {
     { 
         //reset again
         found = false;
-        long till_ms = Utils::current_time_ms() + MAX_TURNING_90_MS * 4;
+        long till_ms = Utils::current_time_ms() + MAX_TURNING_360_MS;
         int this_angle = last_angle;
         while (!found && (m_interruption == INT_NONE) && (Utils::current_time_ms() < till_ms)) {
             Utils::delay_ms(m_config->get_frame_time_ms()>>1);
