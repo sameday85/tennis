@@ -111,6 +111,7 @@ void Motor::stop_motor(int motor) {
             pin1 = PIN_RMOTORS_1;
             pin2 = PIN_RMOTORS_2;
             break;
+            break;
         case MOTOR_COLLECTOR:
             pin1 = PIN_COLLECTOR_1;
             pin2 = PIN_COLLECTOR_2;
@@ -236,7 +237,6 @@ void* Motor::_rotate_car_bg(void *arg) {
     Motor *the_motor = (Motor*)arg;
     
     int state =the_motor->rotate_to_state;
-
     bool clockwise = (state == CAR_STATE_ROTATING_RIGHT_FAST || state == CAR_STATE_ROTATING_RIGHT_SLOW);
     bool fast = (state == CAR_STATE_ROTATING_LEFT_FAST || state == CAR_STATE_ROTATING_RIGHT_FAST);
     int idle_speed = 2;
@@ -247,6 +247,8 @@ void* Motor::_rotate_car_bg(void *arg) {
     int dir = DIR_FORWARD; bool off = false;
     int left_speed = 0, right_speed = 0;
     while (!the_motor->is_paused() && !off) {
+        if (the_motor->m_car_state != state)
+            break;
         if ((dir == DIR_FORWARD && clockwise) || (dir == DIR_BACKWARD && !clockwise)) {
             left_speed = speed;
             right_speed= idle_speed;
@@ -266,6 +268,11 @@ void* Motor::_rotate_car_bg(void *arg) {
             Utils::delay_ms(step);
         }
         dir = 1 - dir; //reverse
+    }
+    //ensure the car is stopped
+    if (the_motor->m_car_state == CAR_STATE_STOPPED) {
+        the_motor->stop_motor(MOTORS_LEFT);
+        the_motor->stop_motor(MOTORS_RIGHT);
     }
     if (the_motor->debug)
         cout << "Exited from rotating car thread ...." << endl;

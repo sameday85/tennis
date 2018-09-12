@@ -25,7 +25,7 @@
 #define ROTATING_SPEED_SLOW 30 //
 
 //time limitation for turning 90 degree in fast speed
-#define MAX_TURNING_90_MS       4000
+#define MAX_TURNING_90_MS       6000
 
 //car movement states
 #define CAR_STATE_STOPPED                   0

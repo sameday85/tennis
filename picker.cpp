@@ -293,6 +293,9 @@ bool Picker::targeting (bool recovering) {
                     found = true;
                 }
             }
+            //The car already turned one round, no ball found
+            if (!found)
+                return false;
         }
         m_motor->rotate_car_slow(direction);
         found = false;
