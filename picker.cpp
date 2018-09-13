@@ -195,7 +195,8 @@ int Picker::choose_turning_driection() {
 //workaround the front or rear obstacle. do nothing for rear obstacle as the car already stopped.
 void Picker::workaround_obstacle() {
     if (debug)
-        cout << "Workaround obstacle" << endl;
+        cout << "@@@@@@Workaround obstacle" << endl;
+    m_motor->stop_car();
     if (m_interruption == INT_FRONT_OBSTACLE) {
         m_motor->move_car_backward();
         Utils::delay_ms(2000);
@@ -204,7 +205,7 @@ void Picker::workaround_obstacle() {
         int direction = choose_turning_driection();
         m_context.last_turn_direction = direction;
         m_motor->rotate_car_fast(direction);
-        Utils::delay_ms(1000);
+        Utils::delay_ms(2000);
     }
     else if (m_interruption == INT_REAR_OBSTACLE) {
         //car already stopped, do nothing here

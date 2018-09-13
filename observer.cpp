@@ -63,9 +63,10 @@ bool Observer::init() {
 void* Observer::_monitor(void *arg) {
     Observer *the_observer = (Observer*)arg;
     while (!the_observer->is_done()) {
+        long front_obstacle = the_observer->m_location->measure_front_distance();
+        long rear_obstacle = the_observer->m_location->measure_rear_distance();
         int car_state = the_observer->m_motor->get_car_state();
         if ((car_state & 1) == 1) {//the is moving forward
-            long front_obstacle = the_observer->m_location->measure_front_distance();
             if (front_obstacle <= FRONT_DISTANCE_DANGEROUS) {
                 if (the_observer->debug)
                     cout << "!!!!!!!!!!!!!!Danger front, stop now: " << front_obstacle << endl;
@@ -74,7 +75,6 @@ void* Observer::_monitor(void *arg) {
             }
         }
         else if (car_state != CAR_STATE_STOPPED) { //moving backwards
-            long rear_obstacle = the_observer->m_location->measure_rear_distance();
             if (rear_obstacle <= REAR_DISTANCE_DANGEROUS) {
                 if (the_observer->debug)
                     cout << "!!!!!!!!!!!!!!Danger rear, stop now: " << rear_obstacle << endl;
