@@ -55,10 +55,18 @@ long Location::measure_distance(int pin_trig, int pin_echo) {
     digitalWrite(pin_trig, HIGH);
     delayMicroseconds(10);  
     digitalWrite(pin_trig, LOW);
-    while (!(digitalRead(pin_echo) == 1));
+    long wait_till = Utils::current_time_ms() + 1000;
+    while (!(digitalRead(pin_echo) == 1)) {
+        //with this condition check, it is still able to measure distance of 2cm
+        if (Utils::current_time_ms() >= wait_till)
+            break;
+    }
     gettimeofday(&tv1, NULL);   
-
-    while(!(digitalRead(pin_echo) == 0));
+    wait_till = Utils::current_time_ms() + 1000;
+    while(!(digitalRead(pin_echo) == 0)) {
+        if (Utils::current_time_ms() >= wait_till)
+            break;
+    }
     gettimeofday(&tv2, NULL);           
 
     start = tv1.tv_sec * 1000000 + tv1.tv_usec;

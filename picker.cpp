@@ -135,6 +135,8 @@ void Picker::run() {
 //stop the picker, cannot be resumed
 void Picker::stop() {
     m_user_action = UA_DONE;
+    if (debug)
+        cout << "Stopping ...................." << endl;
 }
 
 void Picker::de_init() {
@@ -151,6 +153,8 @@ int Picker::choose_turning_driection() {
     
     if (m_context.scene.balls > 0) {
         direction = (m_context.scene.angle > 0 ? TURNING_DIRECTION_RIGHT : TURNING_DIRECTION_LEFT);
+            if (debug)
+                cout << "Decision 1,2" << endl;
     }
     else if (m_context.last_scene_w_balls.balls_at_left > 0 &&  m_context.last_scene_w_balls.balls_at_right > 0) {
         if (m_context.last_scene_w_balls.nearest_ball_at_left < m_context.last_scene_w_balls.nearest_ball_at_right) {
