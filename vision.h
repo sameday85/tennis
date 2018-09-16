@@ -8,9 +8,17 @@
 
 #define CAMERA_FRAME_WIDTH  (320*3)
 #define CAMERA_FRAME_HEIGHT (240*3)
-
+/*
+ Pixels     Acutal Distance(cm)
+ 158            031 (1ft)
+ 305            061 (2ft)
+ 426            353 
+  Tennis Court: 23.77m x 8.23m
+ The nearest distance the camera can see is 8cm
+ */
+//--------------------------------------------------------------------------
 //                                                             0
-typedef struct _Scene {                //                      |
+typedef struct _Scene {                //                       |
     int balls; //total number of balls                         |
     int angle; //The angle of the nearest ball 270(-90) -------o---------90
     int distance; //the nearest ball distance in pixels

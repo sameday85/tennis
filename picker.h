@@ -11,7 +11,7 @@
 
 #define WAIT_BALL_OUT_OF_SCENE_MS   1800 //after the ball is out of scene, wait for this time, then start the collector
 #define WAIT_BALL_PICKUP_MS         2000 //the time collector is running
-#define BACK_AFTER_PICKUP_MS        2000
+#define BACK_AFTER_PICKUP_MS        2500
 #define FRONT_DISTANCE_DANGEROUS    8 //cm
 #define REAR_DISTANCE_DANGEROUS     20 //cm
 
@@ -22,6 +22,9 @@
 
 #define PERFECT_ANGLE           6
 #define GOOD_ANGLE              30 //if the ball is far away
+
+//If the ball is far, we think the car has enough time to make a small turn on its way to pick it up
+#define PIXEL_DISTANCE_FAR          250 //the ball is far if its pixel distance is great than this value
 
 typedef struct _RobotCtx {
     Scene scene;
@@ -49,6 +52,7 @@ class Picker {
     int choose_turning_driection();
     void workaround_obstacle();
     bool get_stable_scene();
+    bool is_far();
     bool is_covered(bool strict);
     bool is_ready_pickup();
     bool tracking();

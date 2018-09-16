@@ -225,6 +225,11 @@ bool Picker::get_stable_scene() {
     return m_vision->get_stable_scene(&m_context.scene);
 }
 
+//@returns true if the ball is at least 61cm(2ft) away
+bool Picker::is_far() {
+    return m_context.scene.balls > 0 && m_context.scene.distance >= PIXEL_DISTANCE_FAR;
+}
+
 //check if the target ball is still in the right position
 //@param strict - true if the ball needs to be at a small angle
 bool Picker::is_covered(bool strict) {
@@ -296,7 +301,7 @@ bool Picker::searching () {
     {
         int direction = choose_turning_driection();
         //off track too much, move the car back first
-        if (!is_covered(false)) {
+        if (!is_covered(false) && !is_far()) {
             if (direction == TURNING_DIRECTION_RIGHT) {
                 m_motor->turn_car_right_backward();
             }
@@ -343,7 +348,7 @@ bool Picker::tracking() {
             else if (is_covered(false)) {//still within allowed range
                 int ball_angle = m_context.scene.angle;
                 int abs_angle = abs(ball_angle);
-                if (abs_angle >= PERFECT_ANGLE * 6 / 10) {//a little bit off the road
+                if (abs_angle >= PERFECT_ANGLE) {//a little bit off the road
                     if (ball_angle < 0)
                         ++counter_left;
                     else if (ball_angle > 0)
