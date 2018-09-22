@@ -240,7 +240,7 @@ void* Motor::_rotate_car_bg(void *arg) {
     bool fast = (state == CAR_STATE_ROTATING_LEFT_FAST || state == CAR_STATE_ROTATING_RIGHT_FAST);
     int idle_speed = 2;
     int speed = the_motor->active_config->speed_base + (fast ? ROTATING_SPEED_FAST : ROTATING_SPEED_SLOW);
-    int duration_ms= fast ? 1000 : 2000;
+    int duration_ms= fast ? 1000 : 2500;
     int step = 100;
 
     int dir = DIR_FORWARD; bool off = false;

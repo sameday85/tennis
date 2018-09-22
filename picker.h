@@ -10,7 +10,6 @@
 #define VENUE_OUTDOOR       1 //tennis court
 
 #define SPEED_PIXELS_PER_MS         0.06 //pixels per milliseconds
-#define BACK_AFTER_PICKUP_MS        2500
 #define FRONT_DISTANCE_DANGEROUS    8 //cm
 #define REAR_DISTANCE_DANGEROUS     20 //cm
 
