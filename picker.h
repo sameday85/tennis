@@ -9,8 +9,7 @@
 #define VENUE_INDOOR        0 //for debugging
 #define VENUE_OUTDOOR       1 //tennis court
 
-#define WAIT_BALL_OUT_OF_SCENE_MS   1800 //after the ball is out of scene, wait for this time, then start the collector
-#define WAIT_BALL_PICKUP_MS         2000 //the time collector is running
+#define SPEED_PIXELS_PER_MS         0.06 //pixels per milliseconds
 #define BACK_AFTER_PICKUP_MS        2500
 #define FRONT_DISTANCE_DANGEROUS    8 //cm
 #define REAR_DISTANCE_DANGEROUS     20 //cm
@@ -20,7 +19,7 @@
 #define PIXEL_DISTANCE_PICK_NEAR    120 //near point, at which the ball can be picked up
 #define PICKUP_ANGLE_NEAR           65  //
 
-#define PERFECT_ANGLE           6
+#define PERFECT_ANGLE           6 //idea angle to pick up the ball
 #define GOOD_ANGLE              30 //if the ball is far away
 
 //If the ball is far, we think the car has enough time to make a small turn on its way to pick it up
@@ -33,13 +32,14 @@ typedef struct _RobotCtx {
     Scene last_scene_w_balls;
     int balls_collected;
     int last_turn_direction;
+    int hint_direction; //Recommended turning direction for picking up more balls
 } RobotCtx;
 
 //Main class to pick up balls
 class Picker {
     public:
     Picker(Config *config);
-    
+
     public:
     bool init();
     void run();
@@ -51,6 +51,7 @@ class Picker {
     bool should_continue();
     int choose_turning_driection();
     void workaround_obstacle();
+    void take_snapshot();
     bool get_stable_scene();
     bool is_far();
     bool is_covered(bool strict);

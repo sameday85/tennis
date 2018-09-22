@@ -44,7 +44,7 @@ void Config::load_config() {
     indoor_config.erosion_size = 3;
     indoor_config.dilation_size= 4;
     indoor_config.canny_thresh = 100;
-    indoor_config.min_area = 10;
+    indoor_config.min_area = 20;
     memcpy(&outdoor_config, &indoor_config, sizeof (RobotConfig));
     
     //parse the configuration file
