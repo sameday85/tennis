@@ -146,7 +146,7 @@ void* Vision::sensor(void *arg) {
             cv::Canny(mask, canny_output, active_config->canny_thresh, active_config->canny_thresh*2, 3 ); /// Detect edges using canny
             cv::findContours(canny_output, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE, cv::Point(0, 0) );/// Find contours
 
-            int half_width = frame.cols >> 1;
+            int half_width = frame.cols >> 1, top_y = frame.rows * 3 / 4;//ball cannot be too high
             int total = 0;
             long min_distance = 0;
             int ball_angle = 180, ball_distance_y = 0, center_x = 0;
@@ -161,9 +161,9 @@ void* Vision::sensor(void *arg) {
                 
                 int diff_x = center.x - half_width;
                 int diff_y = frame.rows - center.y;
-                if (diff_y <= 0)
+                if (diff_y <= 0 || diff_y >= top_y)
                     continue;
-                    
+
                 all_positions.push_back(center);
                 long distance = (long)diff_x * diff_x + (long)diff_y * diff_y;
                 int angle = (int)(atan(1.0 * diff_x / diff_y) * 180.0 / 3.14);
@@ -242,7 +242,9 @@ bool Vision::calibrate() {
     }
     if (debug)
         cv::imwrite("background1.jpg",bg);
-    
+
+    Led::buzzle(false); //notify to put the ball in
+
     int trying = 0;
     cv::Mat frame;
     bool found = false, notified = false;
@@ -260,8 +262,7 @@ bool Vision::calibrate() {
             continue;
         }
         else if (!notified) {
-            Led::turn_on_led(using_pin); //stays on
-            Led::buzzle(false);
+            Led::turn_on_led(using_pin); //stays on, start to recognize the ball
             notified = true;
         }
 

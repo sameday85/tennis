@@ -117,8 +117,8 @@ void Picker::run() {
                 }
                 break;
             case UA_DEBUG:
-                cout << "Front distance " << m_location->measure_front_distance() << endl;
-                m_motor->rotate_car_slow(TURNING_DIRECTION_LEFT);
+                //cout << "Front distance " << m_location->measure_front_distance() << endl;
+                //m_motor->rotate_car_slow(TURNING_DIRECTION_LEFT);
                 Utils::delay_ms(200);
                 break;
             default: //UA_PAUSE, UA_PRE_MOTOR_CALIBRATION, UA_PRE_CAMERA_CALIBRATION, UA_WAITING etc
@@ -237,7 +237,7 @@ bool Picker::get_stable_scene() {
 
 //@returns true if the ball is at least 61cm(2ft) away
 bool Picker::is_far() {
-    return m_context.scene.balls > 0 && m_context.scene.distance >= PIXEL_DISTANCE_FAR;
+    return (m_context.scene.balls > 0) && (m_context.scene.distance >= ((PIXEL_DISTANCE_FAR+PIXEL_DISTANCE_PICK_NEAR)/2));
 }
 
 //check if the target ball is still in the right position
@@ -415,7 +415,7 @@ void Picker::picking_up() {
             m_motor->move_car_forward();
             wait_time = (int)(m_context.scene.distance / SPEED_PIXELS_PER_MS);
             if (wait_time <= 0)
-                wait_time = 2000;
+                wait_time = 3500;
             if (should_continue()) {//the car is still moving
                 if (debug)
                     cout << "==============================>picking up, wait for " << wait_time << "ms" << endl;
@@ -430,7 +430,7 @@ void Picker::picking_up() {
         //Move back a little bit, get ready to pick up another ball
         long till_ms = Utils::current_time_ms() + wait_time;
         while (get_stable_scene() && Utils::current_time_ms() <= till_ms) {
-            if (m_context.scene.balls > 0 && m_context.scene.distance <= PIXEL_DISTANCE_PICK_FAR)
+            if (!should_continue() || (m_context.scene.balls > 1))
                 break;
             m_motor->move_car_backward();
             Utils::delay_ms(m_config-> get_frame_time_ms());
