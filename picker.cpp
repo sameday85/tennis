@@ -154,8 +154,8 @@ int Picker::choose_turning_driection() {
     
     if (m_context.scene.total_balls > 0) {
         direction = (m_context.scene.all_balls[0].angle > 0 ? TURNING_DIRECTION_RIGHT : TURNING_DIRECTION_LEFT);
-            if (debug)
-                cout << "Decision 1" << endl;
+        if (debug)
+            cout << "Decision 1" << endl;
     }
     else if (m_context.last_scene_w_balls.left_balls > 0 &&  m_context.last_scene_w_balls.right_balls > 0) {
         if (m_context.last_scene_w_balls.left_balls >= m_context.last_scene_w_balls.right_balls) {

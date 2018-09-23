@@ -155,7 +155,7 @@ void* Vision::sensor(void *arg) {
             int half_width = frame.cols >> 1, top_y = frame.rows * 3 / 4;//ball cannot be too high
             long min_distance = 0;
             int total = 0, ball_angle = 180, ball_location_x=0, ball_location_y = 0;
-            vector<cv::Point> all_positions;
+            vector<Ball *> all_positions;
             for( size_t i = 0; i < contours.size(); i++ ) {
                 int area = cv::contourArea(contours[i]);
                 if (area < active_config->min_area)
@@ -169,9 +169,17 @@ void* Vision::sensor(void *arg) {
                 if (diff_y <= 0 || diff_y >= top_y)
                     continue;
 
-                all_positions.push_back(center);
-                long distance = (long)diff_x * diff_x + (long)diff_y * diff_y;
                 int angle = (int)(atan(1.0 * diff_x / diff_y) * radians_to_degrees);
+                
+                Ball *one = new Ball();
+                one->x = diff_x;
+                one->y = diff_y;
+                one->angle = angle;
+                one->area = area;
+                one->side =  BALL_SIDE_CENTER; //default to center
+                all_positions.push_back(one);
+
+                long distance = (long)diff_x * diff_x + (long)diff_y * diff_y;
                 if (total++ <= 0 || (distance < min_distance)) {
                     min_distance = distance;
                     ball_location_x = diff_x;
@@ -191,34 +199,22 @@ void* Vision::sensor(void *arg) {
             p_scene->total_balls = total;
             p_scene->center_balls = p_scene->left_balls  = p_scene->right_balls = 0;//reset
             if (total > 0) {
-                //this is the nearest ball
-                p_scene->all_balls[0].x=ball_location_x;
-                p_scene->all_balls[0].y=ball_location_y;
-                p_scene->all_balls[0].angle=ball_angle;
-                p_scene->all_balls[0].side = BALL_SIDE_CENTER;
-                
-                ++p_scene->center_balls;
-            }
-            if (total > 1) {
                 bool found = false; int pos = 1;
                 for (size_t i = 0; i < all_positions.size(); ++i) {
-                    cv::Point pt = all_positions.at(i);
-                    int x = pt.x - half_width;
-                    int y = frame.rows - pt.y;
-                    if (!found && (x == ball_location_x) && (y == ball_location_y)) {//this is the nearest ball
+                    Ball *one = all_positions.at(i);
+                    if (!found && (one->x == ball_location_x) && (one->y == ball_location_y)) {//this is the nearest ball
+                        //this is the nearest ball
+                        memcpy (&p_scene->all_balls[0], one, sizeof(Ball));
+                        ++p_scene->center_balls;
                         found = true;
                     }
                     else {
-                        int angle = (int)(atan(1.0 * x / y) * radians_to_degrees);
-                        p_scene->all_balls[pos].x = x;
-                        p_scene->all_balls[pos].y = y;
-                        p_scene->all_balls[pos].angle = angle;
-
-                        if (angle > ball_angle) {
+                        memcpy (&p_scene->all_balls[pos], one, sizeof(Ball));
+                        if (one->angle > ball_angle) {
                             p_scene->all_balls[pos].side = BALL_SIDE_RIGHT;
                             ++p_scene->right_balls;
                         }
-                        else if (angle < ball_angle) {
+                        else if (one->angle < ball_angle) {
                             p_scene->all_balls[pos].side = BALL_SIDE_LEFT;
                             ++p_scene->left_balls;
                         }
@@ -228,6 +224,7 @@ void* Vision::sensor(void *arg) {
                         }
                         ++pos;
                     }//not the nearest ball
+                    delete one;//free it
                 }
             }
             p_scene->seq++;

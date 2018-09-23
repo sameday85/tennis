@@ -27,6 +27,7 @@ typedef struct _Ball {
     int x, y; //position, the bottom center(camera location) coordination is (0,0)
     int angle; //at camera's left - negative values(0 - -90); at camera's right- positive values(0-90)
     int side; //at the nearest ball's left(BALL_SIDE_LEFT) or right(BALL_SIDE_RIGHT) or it is the nearest ball itself(BALL_SIDE_CENTER)
+    int area; //opencv contour area
 } Ball;
 
 //scene information
