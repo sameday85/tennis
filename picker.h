@@ -29,7 +29,7 @@ typedef struct _RobotCtx {
     int venue;  //see macros VENUE_XXX
     
     Scene last_scene_w_balls;
-    int balls_collected;
+    int total_balls_collected;
     int last_turn_direction;
     int hint_direction; //Recommended turning direction for picking up more balls
 } RobotCtx;
