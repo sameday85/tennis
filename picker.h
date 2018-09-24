@@ -21,17 +21,20 @@
 #define PERFECT_ANGLE           6 //idea angle to pick up the ball
 #define GOOD_ANGLE              30 //if the ball is far away
 
+#define ALGORITHM_NEAREST_FIRST     0
+#define ALGORITHM_RIGHTMOST_FIRST   1
+
 //If the ball is far, we think the car has enough time to make a small turn on its way to pick it up
 #define PIXEL_DISTANCE_FAR          250 //the ball is far if its pixel distance is great than this value
 
 typedef struct _RobotCtx {
     Scene scene;
+    int algorithm;
     int venue;  //see macros VENUE_XXX
-    
-    Scene last_scene_w_balls;
     int total_balls_collected;
-    int last_turn_direction;
-    int hint_direction; //Recommended turning direction for picking up more balls
+    
+    int this_turn_dir_hints;
+    int next_turn_left_hints, next_turn_right_hints; //Recommended turning direction for picking up more balls
 } RobotCtx;
 
 //Main class to pick up balls
@@ -48,10 +51,13 @@ class Picker {
 
     private:
     bool should_continue();
-    int choose_turning_driection();
+    int choose_turning_direction();
+    void reset_turning_hints();
+    double get_score(int side, int total, int max_y);
+    void analyse_scene();
     void workaround_obstacle();
-    void take_snapshot();
     bool get_stable_scene();
+    void consume_scene();
     bool is_far();
     bool is_covered(bool strict);
     bool is_ready_pickup();

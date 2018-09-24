@@ -153,9 +153,8 @@ void* Vision::sensor(void *arg) {
             cv::findContours(canny_output, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE, cv::Point(0, 0) );/// Find contours
 
             int half_width = frame.cols >> 1, top_y = frame.rows * 3 / 4;//ball cannot be too high
-            long min_distance = 0;
-            int total = 0, ball_angle = 180, ball_location_x=0, ball_location_y = 0;
-            vector<Ball *> all_positions;
+            int total = 0;
+            the_vision->p_mtx->lock();
             for( size_t i = 0; i < contours.size(); i++ ) {
                 int area = cv::contourArea(contours[i]);
                 if (area < active_config->min_area)
@@ -169,70 +168,32 @@ void* Vision::sensor(void *arg) {
                 if (diff_y <= 0 || diff_y >= top_y)
                     continue;
 
-                int angle = (int)(atan(1.0 * diff_x / diff_y) * radians_to_degrees);
-                
-                Ball *one = new Ball();
+                Ball *one = &p_scene->all_balls[total++];
                 one->x = diff_x;
                 one->y = diff_y;
-                one->angle = angle;
-                one->area = area;
+                one->distance = (int)(sqrt(diff_x * diff_x + diff_y * diff_y));
+                one->angle = (int)(atan(1.0 * diff_x / diff_y) * radians_to_degrees);
                 one->side =  BALL_SIDE_CENTER; //default to center
-                all_positions.push_back(one);
-
-                long distance = (long)diff_x * diff_x + (long)diff_y * diff_y;
-                if (total++ <= 0 || (distance < min_distance)) {
-                    min_distance = distance;
-                    ball_location_x = diff_x;
-                    ball_location_y = diff_y;
-                    ball_angle = angle;
-                }
+                one->area = area;
+                one->is_target = false;
                 if (verbose) {
                     cv::Scalar color = cv::Scalar( i * 40, i*20, 0 );
                     cv::drawContours( frame, contours, i, color, 2, 8, hierarchy, 0, cv::Point() );
                     cv::circle( frame, center, 3, cv::Scalar(0,255,0), -1, 8, 0 );// draw the circle 
-                    cv::imwrite("balls.jpg", frame);
                 }
                 if (total > MAX_BALLS_AT_VENUE)
                     break;
             }
-            the_vision->p_mtx->lock();
-            p_scene->total_balls = total;
-            p_scene->center_balls = p_scene->left_balls  = p_scene->right_balls = 0;//reset
-            if (total > 0) {
-                bool found = false; int pos = 1;
-                for (size_t i = 0; i < all_positions.size(); ++i) {
-                    Ball *one = all_positions.at(i);
-                    if (!found && (one->x == ball_location_x) && (one->y == ball_location_y)) {//this is the nearest ball
-                        //this is the nearest ball
-                        memcpy (&p_scene->all_balls[0], one, sizeof(Ball));
-                        ++p_scene->center_balls;
-                        found = true;
-                    }
-                    else {
-                        memcpy (&p_scene->all_balls[pos], one, sizeof(Ball));
-                        if (one->angle > ball_angle) {
-                            p_scene->all_balls[pos].side = BALL_SIDE_RIGHT;
-                            ++p_scene->right_balls;
-                        }
-                        else if (one->angle < ball_angle) {
-                            p_scene->all_balls[pos].side = BALL_SIDE_LEFT;
-                            ++p_scene->left_balls;
-                        }
-                        else {
-                            p_scene->all_balls[pos].side = BALL_SIDE_CENTER;
-                            ++p_scene->center_balls;
-                        }
-                        ++pos;
-                    }//not the nearest ball
-                    delete one;//free it
-                }
+            if (verbose) {
+                cv::imwrite("balls.jpg", frame);
             }
+            p_scene->total_balls = total;
+            p_scene->left_balls = p_scene->right_balls = p_scene->center_balls = 0;
             p_scene->seq++;
             the_vision->p_mtx->unlock();
-            all_positions.clear();
-            
-            if (the_vision->debug && (total > 0)) {
-                cout << "#" << (p_scene->seq+1) << ": " << total << ",target ball angle " << ball_angle << ",dist " << ball_location_y  << ",balls(L/R) " <<  p_scene->left_balls << "/" << p_scene->right_balls << ",time=" << (Utils::current_time_ms() - frame_start) << endl;
+
+            if (verbose) {
+                cout << "#" << (p_scene->seq+1) << ":V " << total << ",time=" << (Utils::current_time_ms() - frame_start) << endl;
             }
 
             //save image 

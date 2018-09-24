@@ -24,16 +24,18 @@
 
 //ball information
 typedef struct _Ball {
-    int x, y; //position, the bottom center(camera location) coordination is (0,0)
+    int x, y; //position in pixels, the bottom center(camera location) coordination is (0,0)
+    int distance; //in pixels
     int angle; //at camera's left - negative values(0 - -90); at camera's right- positive values(0-90)
     int side; //at the nearest ball's left(BALL_SIDE_LEFT) or right(BALL_SIDE_RIGHT) or it is the nearest ball itself(BALL_SIDE_CENTER)
-    int area; //opencv contour area
+    int area; //corresponding opencv contour area
+    bool is_target; //this is the ball we are going to pick up now
 } Ball;
 
 //scene information
 typedef struct _Scene {
-    //with the first one is always the nearest one
     Ball all_balls[MAX_BALLS_AT_VENUE];
+    Ball target_ball; //need a backup as sometimes the target ball disppears in one frame
     int total_balls, center_balls, left_balls, right_balls;
     unsigned long seq; //sequence number
 } Scene;

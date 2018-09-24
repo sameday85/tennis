@@ -29,6 +29,7 @@ Picker::Picker(Config *config) {
     m_user_action = UA_NAV2_RESUME;
     m_interruption = INT_NONE;
     memset (&m_context, 0, sizeof (RobotCtx));
+    m_context.algorithm=ALGORITHM_NEAREST_FIRST;
 }
 //initialize all required components
 bool Picker::init() {
@@ -118,7 +119,7 @@ void Picker::run() {
                 break;
             case UA_DEBUG:
                 //cout << "Front distance " << m_location->measure_front_distance() << endl;
-                //m_motor->rotate_car_slow(TURNING_DIRECTION_LEFT);
+                m_motor->rotate_car_fast(TURNING_DIRECTION_LEFT);
                 Utils::delay_ms(200);
                 break;
             default: //UA_PAUSE, UA_PRE_MOTOR_CALIBRATION, UA_PRE_CAMERA_CALIBRATION, UA_WAITING etc
@@ -149,49 +150,18 @@ void Picker::de_init() {
 
 
 //determine what direction we should turn the car
-int Picker::choose_turning_driection() {
+int Picker::choose_turning_direction() {
     int direction = TURNING_DIRECTION_LEFT;
     
     if (m_context.scene.total_balls > 0) {
-        direction = (m_context.scene.all_balls[0].angle > 0 ? TURNING_DIRECTION_RIGHT : TURNING_DIRECTION_LEFT);
+        direction = (m_context.scene.target_ball.angle > 0 ? TURNING_DIRECTION_RIGHT : TURNING_DIRECTION_LEFT);
         if (debug)
             cout << "Decision 1" << endl;
     }
-    else if (m_context.last_scene_w_balls.left_balls > 0 &&  m_context.last_scene_w_balls.right_balls > 0) {
-        if (m_context.last_scene_w_balls.left_balls >= m_context.last_scene_w_balls.right_balls) {
-            if (debug)
-                cout << "Decision 2" << endl;
-            m_context.hint_direction = TURNING_DIRECTION_RIGHT;
-        }
-        else {
-            if (debug)
-                cout << "Decision 3" << endl;
-            direction = TURNING_DIRECTION_RIGHT;
-            m_context.hint_direction = TURNING_DIRECTION_LEFT;
-        }
-    }
-    else if (m_context.last_scene_w_balls.left_balls > 0) {
+    else if (m_context.this_turn_dir_hints != TURNING_DIRECTION_UNKNOWN) {
+        direction = m_context.this_turn_dir_hints;
         if (debug)
-            cout << "Decision 5" << endl;
-    }
-    else if (m_context.last_scene_w_balls.right_balls > 0) {
-        if (debug)
-            cout << "Decision 6" << endl;
-        direction = TURNING_DIRECTION_RIGHT;
-    }
-    else if (m_context.hint_direction > TURNING_DIRECTION_UNKNOWN) {
-        if (debug)
-            cout << "Decision 7, with hint direction" << endl;
-        direction = m_context.hint_direction;
-    }
-    else if (m_context.last_scene_w_balls.all_balls[0].angle <= 0) {
-        if (debug)
-            cout << "Decision 8, no known balls left" << endl;
-    }
-    else {
-        if (debug)
-            cout << "Decision 9, no known balls left" << endl;
-        direction=m_context.last_turn_direction;
+            cout << "Decision 2" << endl;
     }
     
     if (direction == TURNING_DIRECTION_UNKNOWN)
@@ -199,6 +169,98 @@ int Picker::choose_turning_driection() {
 
     return direction;
 }
+
+void Picker::reset_turning_hints() {
+    if (m_context.next_turn_left_hints > m_context.next_turn_right_hints)
+        m_context.this_turn_dir_hints = TURNING_DIRECTION_LEFT;
+    else if (m_context.next_turn_left_hints < m_context.next_turn_right_hints) {
+        m_context.this_turn_dir_hints = TURNING_DIRECTION_RIGHT;
+    }
+    m_context.next_turn_left_hints = m_context.next_turn_right_hints = 0;
+}
+
+//Envaluate balls at given side, returns a double value indicating how good to pick them up next
+//for the score, it is the ball density, the smaller the better
+double Picker::get_score(int side, int total, int max_y) {
+    double x_factor = 1.5;
+    if (max_y <= PIXEL_DISTANCE_PICK_FAR) {
+        max_y = CAMERA_FRAME_HEIGHT; //all balls are good
+    }
+    int count = 0, sum_x = 0, sum_y = 0;
+    for (int i = 0; i < m_context.scene.total_balls; ++i) {
+        if (m_context.scene.all_balls[i].side == side) {
+            //exclude the farest one
+            if (m_context.scene.all_balls[i].y >= max_y)
+                continue;
+            ++count;
+            sum_x += m_context.scene.all_balls[i].x;
+            sum_y += m_context.scene.all_balls[i].y;
+        }
+    }
+    if (count <= 0)
+        return MAX_BALLS_AT_VENUE * CAMERA_FRAME_WIDTH * x_factor + MAX_BALLS_AT_VENUE * CAMERA_FRAME_HEIGHT;
+    double avg_x = 1.0 * sum_x / count;
+    double avg_y = 1.0 * sum_y / count;
+
+    double diff_x = 0, diff_y = 0;
+    for (int i = 0; i < m_context.scene.total_balls; ++i) {
+        if (m_context.scene.all_balls[i].side == side) {
+            if (m_context.scene.all_balls[i].y >= max_y)
+                continue;
+            diff_x += abs(m_context.scene.all_balls[i].x - avg_x);
+            diff_y += abs(m_context.scene.all_balls[i].y - avg_y);
+        }
+    }
+    //supress warning: unused parameter ‘total’
+    if (total > 0) {
+    }
+    return diff_x * x_factor + diff_y;
+}
+
+//Analyse the current scene and try to predicate next turn after the current target ball is picked up
+void Picker::analyse_scene() {
+    if (m_context.scene.total_balls <= 1)
+        return;
+    if (m_context.scene.left_balls <= 0 && m_context.scene.right_balls <= 0)
+        return;
+
+    int max_center_y = 0, max_left_y = 0, max_right_y = 0;
+    for (int i = 0; i < m_context.scene.total_balls; ++i) {
+        if (m_context.scene.all_balls[i].side == BALL_SIDE_CENTER) {
+            if (m_context.scene.all_balls[i].y > max_center_y)
+                max_center_y = m_context.scene.all_balls[i].y;
+        }
+        else if (m_context.scene.all_balls[i].side == BALL_SIDE_RIGHT) {
+            if (m_context.scene.all_balls[i].y > max_right_y)
+                max_right_y = m_context.scene.all_balls[i].y;
+        }
+        else {
+            if (m_context.scene.all_balls[i].y > max_left_y)
+                max_left_y = m_context.scene.all_balls[i].y;
+        }
+    }
+    double left_side_score = 0, right_side_score = 0;
+    if (m_context.scene.left_balls > 0 && m_context.scene.right_balls <= 0) {
+        //need to turn left
+        right_side_score = 65535;
+    }
+    else if (m_context.scene.right_balls > 0 && m_context.scene.left_balls <= 0) {
+        //need to turn right
+        left_side_score = 65535;
+    }
+    else {
+        left_side_score = get_score(BALL_SIDE_LEFT, m_context.scene.left_balls, max_left_y);
+        right_side_score= get_score(BALL_SIDE_RIGHT, m_context.scene.right_balls, max_right_y);
+    }
+    if (left_side_score < right_side_score)
+        ++m_context.next_turn_left_hints;
+    else if (left_side_score > right_side_score) {
+        ++m_context.next_turn_right_hints;
+    }
+    if (debug)
+        cout << "------Left score " << left_side_score << ", right " << right_side_score << ", scene " << m_context.scene.seq << endl;
+}
+
 //workaround the front or rear obstacle. do nothing for rear obstacle as the car already stopped.
 void Picker::workaround_obstacle() {
     if (debug)
@@ -209,8 +271,7 @@ void Picker::workaround_obstacle() {
         Utils::delay_ms(2000);
         if (m_user_action == UA_DONE)
             return;
-        int direction = choose_turning_driection();
-        m_context.last_turn_direction = direction;
+        int direction = choose_turning_direction();
         m_motor->rotate_car_fast(direction);
         Utils::delay_ms(2000);
     }
@@ -219,25 +280,71 @@ void Picker::workaround_obstacle() {
     }
 }
 
-//save this scene if there are more than one ball in it. 
-//this scene will provide information for which direction to turn the car later.
-void Picker::take_snapshot() {
-    if (m_context.scene.total_balls > 1) {
-        memcpy (&m_context.last_scene_w_balls, &m_context.scene, sizeof (Scene));
-        m_context.hint_direction=TURNING_DIRECTION_UNKNOWN;
+//Find the target ball and also count how many balls are at its left, and
+//how many balls are at its right
+void Picker::consume_scene() {
+    int total_balls = m_context.scene.total_balls;
+    if (total_balls > 0) {
+        int target_index = 0, target_value = 0;
+        switch (m_context.algorithm) {
+            case ALGORITHM_NEAREST_FIRST:
+                for (int i = 0; i < total_balls; ++i) {
+                    int distance = m_context.scene.all_balls[i].distance; 
+                    if (i <= 0 || distance < target_value) {
+                        target_value = distance;
+                        target_index = i;
+                    }
+                }
+                break;
+            case ALGORITHM_RIGHTMOST_FIRST:
+                for (int i = 0; i < total_balls; ++i) {
+                    int angle = m_context.scene.all_balls[i].angle; 
+                    if (i <= 0 || angle > target_value) {
+                        target_value = angle;
+                        target_index = i;
+                    }
+                }
+                break;
+        }//switch
+        m_context.scene.all_balls[target_index].is_target = true;
+        memcpy (&m_context.scene.target_ball, &m_context.scene.all_balls[target_index], sizeof (Ball));
+    }
+    if (total_balls > 1) {
+        int target_angle = m_context.scene.target_ball.angle;
+        for (int i = 0; i < total_balls; ++i) {
+            if (m_context.scene.all_balls[i].is_target)
+                continue;
+            if (abs (m_context.scene.all_balls[i].angle - target_angle) <= PERFECT_ANGLE) {
+                m_context.scene.all_balls[i].side = BALL_SIDE_CENTER;
+                m_context.scene.center_balls++;
+            }
+            else if (m_context.scene.all_balls[i].angle < target_angle) {
+                m_context.scene.all_balls[i].side = BALL_SIDE_LEFT;
+                m_context.scene.left_balls++;
+            }
+            else if (m_context.scene.all_balls[i].angle > target_angle) {
+                m_context.scene.all_balls[i].side = BALL_SIDE_RIGHT;
+                m_context.scene.right_balls++;
+            }
+        }
+    }
+    if (debug && (total_balls > 0)) {
+        cout << "#" << m_context.scene.seq << ": " << total_balls << ", angle " << m_context.scene.target_ball.angle << ", distance " << m_context.scene.target_ball.distance << ",L/R " << m_context.scene.left_balls << "/" <<  m_context.scene.right_balls <<  endl;
     }
 }
 
 //get one scene
 //@returns true if one updated scene is available and retrieved, otherwise false.
 bool Picker::get_stable_scene() {
-    take_snapshot();
-    return m_vision->get_stable_scene(&m_context.scene);
+    bool ret = m_vision->get_stable_scene(&m_context.scene);
+    if (ret)
+        consume_scene();
+    return ret;
 }
 
 //@returns true if the ball is at least 61cm(2ft) away
 bool Picker::is_far() {
-    return (m_context.scene.total_balls > 0) && (m_context.scene.all_balls[0].y >= ((PIXEL_DISTANCE_FAR+PIXEL_DISTANCE_PICK_NEAR)/2));
+    return (m_context.scene.total_balls > 0) && (m_context.scene.target_ball.y >= ((PIXEL_DISTANCE_FAR+PIXEL_DISTANCE_PICK_NEAR)/2));
 }
 
 //check if the target ball is still in the right position
@@ -246,8 +353,8 @@ bool Picker::is_covered(bool strict) {
     if (m_context.scene.total_balls <= 0)
         return false;
     
-    int abs_angle = abs(m_context.scene.all_balls[0].angle);
-    int distance  = m_context.scene.all_balls[0].y;
+    int abs_angle = abs(m_context.scene.target_ball.angle);
+    int distance  = m_context.scene.target_ball.y;
     int target_angle = 0;
     if (distance <= PIXEL_DISTANCE_PICK_FAR) {
         target_angle = PICKUP_ANGLE_FAR + (PICKUP_ANGLE_NEAR - PICKUP_ANGLE_FAR) * (PIXEL_DISTANCE_PICK_FAR - distance) / (PIXEL_DISTANCE_PICK_FAR - PIXEL_DISTANCE_PICK_NEAR);
@@ -263,7 +370,7 @@ bool Picker::is_covered(bool strict) {
 bool Picker::is_ready_pickup() {
     if (m_context.scene.total_balls <= 0)
         return false;
-    return (m_context.scene.all_balls[0].y <= PIXEL_DISTANCE_PICK_FAR) && is_covered(true);
+    return (m_context.scene.target_ball.y <= PIXEL_DISTANCE_PICK_FAR) && is_covered(true);
 }
 
 //find one ball (turn the car around if needed) and adjust the car direction to make sure the ball is at 
@@ -277,6 +384,7 @@ bool Picker::searching () {
     if (!get_stable_scene ())
         return false;
     
+    analyse_scene();
     //there is one ball which is ready for picking up
     if (is_covered(true))
         return true;
@@ -284,8 +392,7 @@ bool Picker::searching () {
     //step 1, rotate the car until we see a ball
     bool found = false;
     if (m_context.scene.total_balls <= 0) {
-        int direction = choose_turning_driection();
-        m_context.last_turn_direction = direction; //try to rotate the car in the same direction if no more balls found after one ball was picked up
+        int direction = choose_turning_direction();
         long till_ms = Utils::current_time_ms() + MAX_TURNING_360_MS;//for 360 degree
         m_motor->rotate_car_fast(direction);
         while (!found && (Utils::current_time_ms() < till_ms)) {
@@ -293,6 +400,7 @@ bool Picker::searching () {
             if (!should_continue() || !get_stable_scene()) {
                 break;
             }
+            analyse_scene();
             //slow down once we see a ball
             if (m_context.scene.total_balls > 0) {
                 found = true;
@@ -309,7 +417,7 @@ bool Picker::searching () {
     //step 2, rotating the car slowly to target the ball
     found = false;
     {
-        int direction = choose_turning_driection();
+        int direction = choose_turning_direction();
         //off track too much, move the car back first
         if (!is_covered(false) && !is_far()) {
             if (direction == TURNING_DIRECTION_RIGHT) {
@@ -320,16 +428,18 @@ bool Picker::searching () {
             }
             Utils::delay_ms(1000);
         }
+        analyse_scene();
         m_motor->rotate_car_slow(direction);
         get_stable_scene();//update the scene, as the car just slowed down
         long till_ms = Utils::current_time_ms() + MAX_TURNING_360_MS;
-        int last_angle = m_context.scene.all_balls[0].angle, this_angle = 0;
+        int last_angle = m_context.scene.target_ball.angle, this_angle = 0;
         while (!found && (Utils::current_time_ms() < till_ms)) {
             Utils::delay_ms(m_config->get_frame_time_ms()>>1);
             if (!should_continue() || !get_stable_scene())
                 break;
+            analyse_scene();
             if (m_context.scene.total_balls > 0) {
-                this_angle = m_context.scene.all_balls[0].angle;
+                this_angle = m_context.scene.target_ball.angle;
                 if (is_covered(true) || (this_angle * last_angle < 0)) {//ball moved from one side to another side
                     found = true;
                 }
@@ -352,13 +462,14 @@ bool Picker::tracking() {
     bool ready_to_pickup = false;
     //tracking the ball
     while (should_continue() && get_stable_scene()) {
+        analyse_scene();
         if (m_context.scene.total_balls > 0) {
             if (is_ready_pickup()) {
                 ready_to_pickup = true;
                 break;
             }
             else if (is_covered(false)) {//still within allowed range
-                int ball_angle = m_context.scene.all_balls[0].angle;
+                int ball_angle = m_context.scene.target_ball.angle;
                 int abs_angle = abs(ball_angle);
                 if (abs_angle >= PERFECT_ANGLE) {//a little bit off the road
                     if (ball_angle < 0)
@@ -402,18 +513,25 @@ bool Picker::tracking() {
 void Picker::picking_up() {
     if (debug)
         cout << "@@@Picking up" << endl;
+    
+    //reseet hints
+    reset_turning_hints();
+    
     bool picked_one = false;
     int  wait_time = 0;
     if (searching()) {
         if (debug)
-            cout << "**Found the ball to be picked up, angle " << m_context.scene.all_balls[0].angle << endl;
+            cout << "**Found the ball to be picked up, angle " << m_context.scene.target_ball.angle << endl;
         m_motor->move_car_forward();
         if (tracking()) {
             if (debug)
                 cout << "==============================>Ready to pickup" << endl;
             //move forward to pick it up
             m_motor->move_car_forward();
-            wait_time = (int)(m_context.scene.all_balls[0].y / SPEED_PIXELS_PER_MS);
+            int distance = m_context.scene.target_ball.y;
+            if (get_stable_scene() && m_context.scene.total_balls > 0)
+                distance = m_context.scene.target_ball.y;
+            wait_time = (int)(distance / SPEED_PIXELS_PER_MS);
             if (wait_time <= 0)
                 wait_time = 3500;
             if (should_continue()) {//the car is still moving
