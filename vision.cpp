@@ -168,11 +168,12 @@ void* Vision::sensor(void *arg) {
                 if (diff_y <= 0 || diff_y >= top_y)
                     continue;
 
+                double radian = atan(1.0 * diff_x / diff_y);
                 Ball *one = &p_scene->all_balls[total++];
                 one->x = diff_x;
                 one->y = diff_y;
-                one->distance = (int)(sqrt(diff_x * diff_x + diff_y * diff_y));
-                one->angle = (int)(atan(1.0 * diff_x / diff_y) * radians_to_degrees);
+                one->distance = (int)(3.648/(0.0003937*center.y-0.1035823)/cos(radian) * 0.66);
+                one->angle = (int)(radian * radians_to_degrees);
                 one->side =  BALL_SIDE_CENTER; //default to center
                 one->area = area;
                 one->is_target = false;
@@ -181,7 +182,10 @@ void* Vision::sensor(void *arg) {
                     cv::drawContours( frame, contours, i, color, 2, 8, hierarchy, 0, cv::Point() );
                     cv::circle( frame, center, 3, cv::Scalar(0,255,0), -1, 8, 0 );// draw the circle 
                 }
-                if (total > MAX_BALLS_AT_VENUE)
+                if (verbose) {
+                    cout << "       ??: distance=" << one->distance << "cm, angle=" << one->angle  << ",coord=" << one->x <<","<<one->y << endl;
+                }
+                if (total >= MAX_BALLS_AT_VENUE)
                     break;
             }
             if (verbose) {
@@ -193,7 +197,7 @@ void* Vision::sensor(void *arg) {
             the_vision->p_mtx->unlock();
 
             if (verbose) {
-                cout << "#" << (p_scene->seq+1) << ":V " << total << ",time=" << (Utils::current_time_ms() - frame_start) << endl;
+                cout << "#" << (p_scene->seq+1) << ": Total balls=" << total << ",time=" << (Utils::current_time_ms() - frame_start) << endl;
             }
 
             //save image 

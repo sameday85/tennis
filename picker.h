@@ -9,7 +9,6 @@
 #define VENUE_INDOOR        0 //for debugging
 #define VENUE_OUTDOOR       1 //tennis court
 
-#define SPEED_PIXELS_PER_MS         0.06 //pixels per milliseconds
 #define FRONT_DISTANCE_DANGEROUS    8 //cm
 #define REAR_DISTANCE_DANGEROUS     20 //cm
 
@@ -21,15 +20,19 @@
 #define PERFECT_ANGLE           6 //idea angle to pick up the ball
 #define GOOD_ANGLE              30 //if the ball is far away
 
-#define ALGORITHM_NEAREST_FIRST     0
-#define ALGORITHM_RIGHTMOST_FIRST   1
+#define ALGORITHM_TBD               0
+#define ALGORITHM_NEAREST_FIRST     1
+#define ALGORITHM_RIGHTMOST_FIRST   2
+#define ALGORITHM_LEFTMOST_FIRST    3
+
+#define VISIBLE_DISTANCE_CM         120 //in cm
 
 //If the ball is far, we think the car has enough time to make a small turn on its way to pick it up
 #define PIXEL_DISTANCE_FAR          250 //the ball is far if its pixel distance is great than this value
 
 typedef struct _RobotCtx {
     Scene scene;
-    int algorithm;
+    int last_algorithm, active_algorithm;
     int venue;  //see macros VENUE_XXX
     int total_balls_collected;
     
@@ -53,7 +56,6 @@ class Picker {
     bool should_continue();
     int choose_turning_direction();
     void reset_turning_hints();
-    double get_score(int side, int total, int max_y);
     void analyse_scene();
     void workaround_obstacle();
     bool get_stable_scene();
