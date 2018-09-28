@@ -35,7 +35,6 @@ typedef struct _Ball {
 //scene information
 typedef struct _Scene {
     Ball all_balls[MAX_BALLS_AT_VENUE];
-    Ball target_ball; //need a backup as sometimes the target ball disppears in one frame
     int total_balls, center_balls, left_balls, right_balls;
     unsigned long seq; //sequence number
 } Scene;

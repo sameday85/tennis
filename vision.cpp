@@ -172,8 +172,8 @@ void* Vision::sensor(void *arg) {
                 Ball *one = &p_scene->all_balls[total++];
                 one->x = diff_x;
                 one->y = diff_y;
-                one->distance = (int)(3.648/(0.0003937*center.y-0.1035823)/cos(radian) * 0.66);
                 one->angle = (int)(radian * radians_to_degrees);
+                one->distance = (int)(3.648/(0.0003937*center.y-0.1035823)/cos(radian) * (0.66-0.00438*abs(one->angle)));
                 one->side =  BALL_SIDE_CENTER; //default to center
                 one->area = area;
                 one->is_target = false;

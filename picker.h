@@ -19,6 +19,7 @@
 
 #define PERFECT_ANGLE           6 //idea angle to pick up the ball
 #define GOOD_ANGLE              30 //if the ball is far away
+#define NARROW_ANGLE            40 //for determing the rightmost or leftmost ball
 
 #define ALGORITHM_TBD               0
 #define ALGORITHM_NEAREST_FIRST     1
@@ -32,6 +33,7 @@
 
 typedef struct _RobotCtx {
     Scene scene;
+    Ball target_ball; //need a backup as sometimes the target ball disppears in one frame
     int last_algorithm, active_algorithm;
     int venue;  //see macros VENUE_XXX
     int total_balls_collected;
@@ -66,6 +68,7 @@ class Picker {
     bool tracking();
     bool searching();
     void picking_up();
+    void after_pickup(long delay);
     
     private:
     bool debug; //as m_config->is_debug()
