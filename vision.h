@@ -14,7 +14,7 @@
  305            061 (2ft)
  426            353 
  Tennis Court: 23.77m x 8.23m
- The nearest distance the camera can see is 8cm
+ The nearest distance the camera can see is 21cm
  */
 #define MAX_BALLS_AT_VENUE          50
  

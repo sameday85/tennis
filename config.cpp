@@ -28,6 +28,7 @@ Config::Config() {
     activate_indoor_config();
     //by default the debug is on
     m_debug = true;
+    m_verbose = false;
 }
 
 //load the configuration from the file
@@ -129,6 +130,16 @@ void Config::set_debug (bool d) {
 //@returns if the system is in debug mode
 bool Config::is_debug() {
     return m_debug;
+}
+
+//The camera will save each frame to a jpg image in verbose mode
+void Config::set_verbose (bool b) {
+    m_verbose = b;
+}
+
+//Must also be in debug mode
+bool Config::is_verbose() {
+    return m_debug && m_verbose;
 }
 
 //@return the configuration of frames per seconds

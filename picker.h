@@ -39,6 +39,7 @@ typedef struct _RobotCtx {
     int algorithm_history[MAX_ALGORITHM_HISTORY];
     int algorithm_pos;//pointing to the first empty/available cell in above array
     int active_algorithm;
+    int max_near_balls; //need to move back a little bit to pick up these near balls
     int venue;  //see macros VENUE_XXX
     int total_balls_collected;
 } RobotCtx;

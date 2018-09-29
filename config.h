@@ -29,13 +29,15 @@ class Config {
     void load_config();
     void save_config();
     void set_debug(bool d);
+    void set_verbose(bool b);
     bool is_debug();
+    bool is_verbose();
     int get_frames_per_second();
     int get_frame_time_ms();
 
     private:
     int frames_per_second, frame_time_ms; //image capturing
-    bool m_debug;
+    bool m_debug, m_verbose;
     RobotConfig indoor_config, outdoor_config, *active_config;
 };
 

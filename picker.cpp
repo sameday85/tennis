@@ -346,27 +346,35 @@ void Picker::consume_scene() {
     m_context.scene.all_balls[target_index].is_target = true;
     memcpy (&m_context.target_ball, &m_context.scene.all_balls[target_index], sizeof (Ball));
 
+    int near_balls = 0;//the number of balls which is close to the target ball
     if (total_balls > 1) {
         int target_angle = m_context.target_ball.angle;
         for (int i = 0; i < total_balls; ++i) {
-            if (m_context.scene.all_balls[i].is_target)
+            Ball *this_ball= &m_context.scene.all_balls[i];
+            if (this_ball->is_target)
                 continue;
-            if (abs (m_context.scene.all_balls[i].angle - target_angle) <= PERFECT_ANGLE) {
-                m_context.scene.all_balls[i].side = BALL_SIDE_CENTER;
+            if (abs (this_ball->angle - target_angle) <= PERFECT_ANGLE) {
+                this_ball->side = BALL_SIDE_CENTER;
                 m_context.scene.center_balls++;
             }
-            else if (m_context.scene.all_balls[i].angle < target_angle) {
-                m_context.scene.all_balls[i].side = BALL_SIDE_LEFT;
+            else if (this_ball->angle < target_angle) {
+                this_ball->side = BALL_SIDE_LEFT;
                 m_context.scene.left_balls++;
             }
-            else if (m_context.scene.all_balls[i].angle > target_angle) {
-                m_context.scene.all_balls[i].side = BALL_SIDE_RIGHT;
+            else if (this_ball->angle > target_angle) {
+                this_ball->side = BALL_SIDE_RIGHT;
                 m_context.scene.right_balls++;
             }
+            //The nearest distance the camera can see is 21cm
+            if ((this_ball->side != BALL_SIDE_CENTER) && (this_ball->distance <= (m_context.target_ball.distance + 10))) {
+                ++near_balls;
+            }
         }
+        if (near_balls > m_context.max_near_balls)
+            m_context.max_near_balls=near_balls;
     }
     if (debug && (total_balls > 0)) {
-        cout << "#" << m_context.scene.seq << ": " << total_balls << ", angle " << m_context.target_ball.angle << ", distance " << m_context.target_ball.distance << "cm/pixels " << m_context.target_ball.y << ",L/R " << m_context.scene.left_balls << "/" <<  m_context.scene.right_balls << ",algorithm=" << get_algorithm_name() << endl;
+        cout << "#" << m_context.scene.seq << ": " << total_balls << ", angle " << m_context.target_ball.angle << ", distance " << m_context.target_ball.distance << "cm/pixels " << m_context.target_ball.y << ",L" << m_context.scene.left_balls << "R" <<  m_context.scene.right_balls <<"N"<<near_balls << ",algorithm=" << get_algorithm_name() << endl;
     }
 }
 
@@ -577,8 +585,11 @@ void Picker::picking_up() {
 
 //move the car back a little bit so that we can see other balls
 void Picker::after_pickup(bool picked_one, long delay) {
+    int near_balls = m_context.max_near_balls;
+    
     push_algorithm(m_context.active_algorithm);
     m_context.active_algorithm = ALGORITHM_TBD;
+    m_context.max_near_balls=0;
 
     if (picked_one && delay > 0) {
         long till_ms = Utils::current_time_ms() + delay;
@@ -588,7 +599,8 @@ void Picker::after_pickup(bool picked_one, long delay) {
             m_motor->move_car_backward();
             Utils::delay_ms(m_config-> get_frame_time_ms());
         }
-        Utils::delay_ms(1200);
+        if (near_balls > 0)
+            Utils::delay_ms(1200);
     }
 }
 

@@ -100,7 +100,7 @@ bool Vision::get_stable_scene(Scene *output) {
 //balls at the left of the nearest ball, balls at the right of the nearest ball are also available.
 void* Vision::sensor(void *arg) {
     Vision *the_vision = (Vision*)arg;
-    bool verbose = false;
+    bool verbose = the_vision->get_config()->is_verbose();
 
     const double radians_to_degrees = 180.0 / 3.14;
     

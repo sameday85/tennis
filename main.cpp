@@ -74,6 +74,9 @@ int main ( int argc,char **argv ) {
         else if (strcmp (argv[i], "-debug") == 0) {
             startup_action = UA_DEBUG;
         }
+        else if (strcmp (argv[i], "-verbose") == 0) {
+            g_config->set_verbose(true);
+        }
     }
     
     g_picker = new Picker(g_config);
