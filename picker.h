@@ -26,20 +26,21 @@
 #define ALGORITHM_RIGHTMOST_FIRST   2
 #define ALGORITHM_LEFTMOST_FIRST    3
 
-#define VISIBLE_DISTANCE_CM         120 //in cm
+#define MAX_ALGORITHM_HISTORY       5
+
+#define VISIBLE_DISTANCE_CM         100 //in cm
 
 //If the ball is far, we think the car has enough time to make a small turn on its way to pick it up
-#define PIXEL_DISTANCE_FAR          250 //the ball is far if its pixel distance is great than this value
+#define PIXEL_DISTANCE_FAR          150
 
 typedef struct _RobotCtx {
     Scene scene;
     Ball target_ball; //need a backup as sometimes the target ball disppears in one frame
-    int last_algorithm, active_algorithm;
+    int algorithm_history[MAX_ALGORITHM_HISTORY];
+    int algorithm_pos;//pointing to the first empty/available cell in above array
+    int active_algorithm;
     int venue;  //see macros VENUE_XXX
     int total_balls_collected;
-    
-    int this_turn_dir_hints;
-    int next_turn_left_hints, next_turn_right_hints; //Recommended turning direction for picking up more balls
 } RobotCtx;
 
 //Main class to pick up balls
@@ -57,22 +58,24 @@ class Picker {
     private:
     bool should_continue();
     int choose_turning_direction();
-    void reset_turning_hints();
-    void analyse_scene();
     void workaround_obstacle();
     bool get_stable_scene();
     void consume_scene();
+    int get_2nd_last_algorithm();
+    int get_last_algorithm();
+    void push_algorithm(int algorithm);
+    std::string get_algorithm_name();
     bool is_far();
     bool is_covered(bool strict);
     bool is_ready_pickup();
     bool tracking();
     bool searching();
     void picking_up();
-    void after_pickup(long delay);
-    
+    void after_pickup(bool picked_one, long delay);
+
     private:
     bool debug; //as m_config->is_debug()
-    int  m_interruption; //see macros INT_XXX
+    int m_interruption; //see macros INT_XXX
     int m_user_action;
     Config *m_config;
     Motor *m_motor;
