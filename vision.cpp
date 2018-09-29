@@ -152,7 +152,7 @@ void* Vision::sensor(void *arg) {
             cv::Canny(mask, canny_output, active_config->canny_thresh, active_config->canny_thresh*2, 3 ); /// Detect edges using canny
             cv::findContours(canny_output, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE, cv::Point(0, 0) );/// Find contours
 
-            int half_width = frame.cols >> 1, top_y = frame.rows * 3 / 4;//ball cannot be too high
+            int half_width = frame.cols >> 1, top_y = frame.rows - 263;//ball cannot be too high, the calculated distance cannot be negative
             int total = 0;
             the_vision->p_mtx->lock();
             for( size_t i = 0; i < contours.size(); i++ ) {
