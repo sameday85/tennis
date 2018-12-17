@@ -119,9 +119,13 @@ void Picker::run() {
                 }
                 break;
             case UA_DEBUG:
-                //cout << "Front distance " << m_location->measure_front_distance() << endl;
+                cout << "Front distance " << m_location->measure_front_distance() << endl;
+                cout << "Rear distance " << m_location->measure_rear_distance() << endl;
+                //Led::turn_off_led(PIN_LED_RED);
+                //Led::buzzle(true);
+                //m_motor->start_collector();
                 //m_motor->rotate_car_fast(TURNING_DIRECTION_LEFT);
-                Utils::delay_ms(200);
+                Utils::delay_ms(1000);
                 break;
             default: //UA_PAUSE, UA_PRE_MOTOR_CALIBRATION, UA_PRE_CAMERA_CALIBRATION, UA_WAITING etc
                 Utils::delay_ms(1000);

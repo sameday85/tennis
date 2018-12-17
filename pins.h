@@ -20,12 +20,12 @@
 
 //buttons
 #define PIN_BTN1            0
-#define PIN_BTN2            12
+#define PIN_BTN2            2
 
 //leds
-#define PIN_LED_RED         2
+#define PIN_LED_RED         12
 #define PIN_LED_GREEN       13
-#define PIN_LED_BLUE        14
+#define PIN_LED_BLUE        23
 
 //the buzzer
 #define PIN_BUZZER          3

@@ -59,7 +59,12 @@ void Led::set_led_state(int state) {
 
 //make a long or shot buzzle
 void Led::buzzle (bool long_time) {
-    digitalWrite(PIN_BUZZER, HIGH);
-    Utils::delay_ms(long_time ? 2000 : 300);
+    int duration = long_time ? 2000 : 300;
+    for(int i=0;i<(duration/2);i++) { 
+        digitalWrite(PIN_BUZZER,HIGH);// sound 
+        Utils::delay_ms(1);//delay1ms 
+        digitalWrite(PIN_BUZZER,LOW);//not sound 
+        Utils::delay_ms(1);//ms delay
+    }
     digitalWrite(PIN_BUZZER, LOW);
 }
